@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Matterport Viewer</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- <iframe id="showcase" allow="xr; vr; fullscreen"
+        src="https://my.matterport.com/show/?m=YKt7NUHjP4c&play=1&applicationKey=YOUR_APPLICATION_KEY"></iframe> -->
+
+    <!-- ID SPAZIO DIMOSTRATIVO AGpGwFzhgSN -->
+    <!-- ID SPAZIO CUSTOM YKt7NUHjP4c -->
+
+    <iframe id="showcase" width="853" height="480" src="https://my.matterport.com/show/?m=YKt7NUHjP4c" frameborder="0"
+        allowfullscreen allow="autoplay; fullscreen; web-share; xr-spatial-tracking;">
+        <button onclick="goToPointB()">Vai al punto B</button>
+    </iframe>
+
+
+    <script type="text/javascript" src="https://static.matterport.com/showcase-sdk/latest.js"></script>
+    <!-- <script>
+        window.addEventListener('message', function (event) {
+            // Example: use JavaScript SDK to interact
+            const sdk = window.MP_SDK;
+
+            sdk.connect(document.getElementById('showcase'), 'YOUR_APPLICATION_KEY')
+                .then(function (player) {
+                    console.log('Matterport SDK connected!');
+                    // Example: get the current position
+                    player.Camera.getPosition().then(pos => {
+                        console.log('Current position:', pos);
+                    });
+                });
+        });
+    </script> -->
+    <script>
+        const iframe = document.getElementById('showcase');
+        let sdkPlayer;
+
+        console.log('******** MP SDK + ' + window.MP_SDK + ' ********');
+        // console.log('******** MP SDK connect + ' + window.MP_SDK.connect + ' ********');
+        // console.log('******** MP SDK String + ' + window.MP_SDK.toString() + ' ********');
+        console.log('SDK version:', window.MP_SDK.version);
+
+        // window.MP_SDK.connect(iframe,
+        //     {
+        //         auth: {
+        //             accessToken: 'f8d1e8285413f15c39e102c41b0463e4'
+        //         }
+        //     },
+        //     // 'beyaptx90idi0amgighxdu00a'
+        // ).then(player => {
+        //     console.log('******** CONNECTION SDK ********');
+        //     // Example: get the current position
+        //     player.Camera.getPosition().then(pos => {
+        //         console.log('Current position:', pos);
+        //     });
+        // });
+
+        iframe.addEventListener('load', async () => {
+            console.log('******** CONNECTION START ********');
+
+            try {
+                window.MP_SDK.connect(iframe,
+                    // {
+                    //     auth: {
+                    //         accessToken: 'f8d1e8285413f15c39e102c41b0463e4'
+                    //     }
+                    // },
+                    'beyaptx90idi0amgighxdu00a',
+                    // '4.2.8+1e68dce6'
+                    // '25.5.1_webgl-619-gab9e0006ce'
+                    '2.5'
+                )
+                    .then(player => {
+                        sdkPlayer = player;
+                        console.log('******** CONNECTION SDK ********');
+
+                        // Debug: stampa posizione corrente
+                        sdkPlayer.Camera.getPosition().then(pos => {
+                            console.log('Posizione iniziale (Punto A):', pos);
+                        });
+                    });
+            } catch (e) {
+                console.log('******** CONNECTION ERROR ********');
+                console.log(e);
+                console.error(e);
+            }
+        });
+
+        function goToPointB() {
+            if (!sdkPlayer) return;
+
+            // Esempio: punto B con coordinate 3D (sostituisci con le tue reali)
+            const pointB = {
+                x: 1.5,
+                y: 1.4,
+                z: -2.1,
+                rotation: {
+                    x: 0,
+                    y: 0,
+                    z: 0
+                }
+            };
+
+            sdkPlayer.Camera.moveTo(pointB, {
+                transition: sdkPlayer.Camera.Transition.SMOOTH,
+                time: 2000
+            });
+        }
+    </script>
+</body>
+
+</html>
