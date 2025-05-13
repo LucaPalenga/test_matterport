@@ -11,119 +11,264 @@
             padding: 0;
             height: 100%;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
         iframe {
-            width: 100%;
-            height: 100%;
+            flex-grow: 1;
             border: none;
+        }
+
+        button {
+            padding: 10px;
+            font-size: 16px;
+            z-index: 1000;
+        }
+
+        #path {
+            position: absolute;
+            height: 30px;
+        }
+
+        #initBtn {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+        }
+
+        .path-button {
+            position: absolute;
+            height: 30px;
         }
     </style>
 </head>
 
 <body>
-    <!-- <iframe id="showcase" allow="xr; vr; fullscreen"
-        src="https://my.matterport.com/show/?m=YKt7NUHjP4c&play=1&applicationKey=YOUR_APPLICATION_KEY"></iframe> -->
-
-    <!-- ID SPAZIO DIMOSTRATIVO AGpGwFzhgSN -->
-    <!-- ID SPAZIO CUSTOM YKt7NUHjP4c -->
-
-    <iframe id="showcase" width="853" height="480" src="https://my.matterport.com/show/?m=YKt7NUHjP4c" frameborder="0"
-        allowfullscreen allow="autoplay; fullscreen; web-share; xr-spatial-tracking;">
-        <button onclick="goToPointB()">Vai al punto B</button>
-    </iframe>
+    <button id="initBtn" onclick="init()">Inizializza</button>
+    <button id="path" type="button">Stampa percorso</button>
+    <div id="path-buttons-container"></div>
 
 
+    <!-- HOME YKt7NUHjP4c -->
+    <!-- RAV ZQ7sYhu3mQE -->
+    <iframe id="showcase" src="https://my.matterport.com/show/?m=ZQ7sYhu3mQE" allowfullscreen
+        allow="xr-spatial-tracking; accelerometer; gyroscope"></iframe>
+
+    <!-- <script src="bundle/sdk-bundle.js"></script> -->
     <script type="text/javascript" src="https://static.matterport.com/showcase-sdk/latest.js"></script>
-    <!-- <script>
-        window.addEventListener('message', function (event) {
-            // Example: use JavaScript SDK to interact
-            const sdk = window.MP_SDK;
 
-            sdk.connect(document.getElementById('showcase'), 'YOUR_APPLICATION_KEY')
-                .then(function (player) {
-                    console.log('Matterport SDK connected!');
-                    // Example: get the current position
-                    player.Camera.getPosition().then(pos => {
-                        console.log('Current position:', pos);
-                    });
-                });
-        });
-    </script> -->
     <script>
+        const buttonPath = document.getElementById('path');
         const iframe = document.getElementById('showcase');
-        let sdkPlayer;
+        var container = document.getElementById('path-buttons-container');
 
-        console.log('******** MP SDK + ' + window.MP_SDK + ' ********');
-        // console.log('******** MP SDK connect + ' + window.MP_SDK.connect + ' ********');
-        // console.log('******** MP SDK String + ' + window.MP_SDK.toString() + ' ********');
-        console.log('SDK version:', window.MP_SDK.version);
+        let sdk = null;
+        let graph = null;
 
-        // window.MP_SDK.connect(iframe,
-        //     {
-        //         auth: {
-        //             accessToken: 'f8d1e8285413f15c39e102c41b0463e4'
-        //         }
-        //     },
-        //     // 'beyaptx90idi0amgighxdu00a'
-        // ).then(player => {
-        //     console.log('******** CONNECTION SDK ********');
-        //     // Example: get the current position
-        //     player.Camera.getPosition().then(pos => {
-        //         console.log('Current position:', pos);
-        //     });
-        // });
+        document.getElementById('initBtn').disabled = true;
 
         iframe.addEventListener('load', async () => {
-            console.log('******** CONNECTION START ********');
 
             try {
-                window.MP_SDK.connect(iframe,
-                    // {
-                    //     auth: {
-                    //         accessToken: 'f8d1e8285413f15c39e102c41b0463e4'
-                    //     }
-                    // },
-                    'beyaptx90idi0amgighxdu00a',
-                    // '4.2.8+1e68dce6'
-                    // '25.5.1_webgl-619-gab9e0006ce'
-                    '2.5'
-                )
-                    .then(player => {
-                        sdkPlayer = player;
-                        console.log('******** CONNECTION SDK ********');
+                sdk = await window.MP_SDK.connect(iframe, 'beyaptx90idi0amgighxdu00a', '2.5');
+                console.log('SDK connesso');
 
-                        // Debug: stampa posizione corrente
-                        sdkPlayer.Camera.getPosition().then(pos => {
-                            console.log('Posizione iniziale (Punto A):', pos);
-                        });
-                    });
+                // Debug: mostra posizione iniziale
+                // const pos = await sdkPlayer.Camera.getPosition();
+                // console.log('Posizione iniziale:', pos);
+
+                // Creazione del grafo
+                graph = sdk.Graph.createDirectedGraph();
+                document.getElementById('initBtn').disabled = false;
+
+
+                sdk.Camera.pose.subscribe(function (pose) {
+                    // Changes to the Camera pose have occurred.
+                    console.log('Current position is ', pose.position);
+                    console.log('Rotation angle is ', pose.rotation);
+                    console.log('Sweep UUID is ', pose.sweep);
+                    console.log('View mode is ', pose.mode);
+                });
+
+                console.log('Grafo creato:', graph);
             } catch (e) {
-                console.log('******** CONNECTION ERROR ********');
-                console.log(e);
-                console.error(e);
+                console.error('Errore nella connessione SDK:', e);
             }
         });
 
-        function goToPointB() {
-            if (!sdkPlayer) return;
+        // Init method async
+        async function init() {
+            await obtainMattertags();
+            // await getGraphVertices();
+            setEdges();
 
-            // Esempio: punto B con coordinate 3D (sostituisci con le tue reali)
-            const pointB = {
-                x: 1.5,
-                y: 1.4,
-                z: -2.1,
-                rotation: {
-                    x: 0,
-                    y: 0,
-                    z: 0
-                }
-            };
-
-            sdkPlayer.Camera.moveTo(pointB, {
-                transition: sdkPlayer.Camera.Transition.SMOOTH,
-                time: 2000
+            buttonPath.addEventListener('click', function () {
+                let vertices = getGraphVertices();
+                findPath(vertices[0], vertices[vertices.length - 1]);
             });
+        }
+
+        async function obtainMattertags() {
+            if (!sdk) {
+                alert('SDK non ancora pronto.');
+                return;
+            }
+
+            try {
+                const tags = await sdk.Mattertag.getData();
+                console.log('Mattertags trovati:', tags);
+                tags.forEach((tag, index) => {
+
+                    // console.log(`--- Mattertag #${index + 1} ---`);
+                    // console.log(`ID: ${tag.sid}`);
+                    // console.log(`Titolo: ${tag.label}`);
+                    // console.log(`Descrizione: ${tag.description}`);
+                    // console.log(`Posizione: x=${tag.anchorPosition.x}, y=${tag.anchorPosition.y}, z=${tag.anchorPosition.z}`);
+                    // console.log(`Colore: ${JSON.stringify(tag.color)}`);
+                    // console.log(`URL: ${tag.url}`);
+                    // console.log('--------------------------');
+
+                    /// Aggiungi punto al grafo
+                    if (graph) {
+                        console.log(`Aggiungo punto al grafo:  ${tag.sid}`);
+                        graph.addVertex({
+                            id: tag.label,
+                            data:
+                            {
+                                x: tag.anchorPosition.x,
+                                y: tag.anchorPosition.y,
+                                z: tag.anchorPosition.z
+                            }
+                        });
+                    }
+
+                });
+
+
+                // Stampa tutti i vertex del grafo
+                console.log('Vertex del grafo:', graph.getVertices());
+
+                alert(`Trovati ${tags.length} Mattertag(s). Controlla la console.`);
+            } catch (e) {
+                console.error('Errore nel recupero dei Mattertag:', e);
+            }
+
+
+        }
+
+        function goToVertex(vertex) {
+            console.log(`Navigazione verso il vertice: ${vertex.id}`);
+            // Esegui l'azione desiderata, ad esempio spostare la visuale
+            const mode = sdk.Mode.Mode.DOLLHOUSE;
+            const transition = sdk.Mode.TransitionType.FLY;
+            // const zoom = 5;
+
+            sdk.Mode.moveTo(mode, {
+                position: vertex.data,
+                transition: transition,
+                // zoom,
+            });
+        }
+        // function goToVertex(vertex) {
+        //     if (!sdk || !sdk.Camera) {
+        //         console.warn('SDK non pronto o modulo Camera non disponibile.');
+        //         return;
+        //     }
+
+        //     console.log(`Navigazione verso il vertice: ${vertex.id}`);
+
+        //     const position = {
+        //         x: vertex.data.x,
+        //         y: vertex.data.y,
+        //         z: vertex.data.z,
+        //         rotation: { x: 0, y: 0, z: 0 } // oppure personalizza la rotazione se vuoi
+        //     };
+
+        //     sdk.Camera.moveTo(position, {
+        //         transition: 'fly', // puoi usare anche 'smooth' o 'instant'
+        //         time: 2000
+        //     }).then(() => {
+        //         console.log(`Spostato con successo a ${vertex.id}`);
+        //     }).catch(err => {
+        //         console.error('Errore nello spostamento:', err);
+        //     });
+        // }
+
+
+        function createPathButtons(path) {
+            console.log('Creo pulsanti');
+            // Rimuove i pulsanti precedenti
+            const existingButtons = document.querySelectorAll('.path-button');
+            existingButtons.forEach(btn => btn.remove());
+
+            // Crea nuovi pulsanti per ogni vertice nel percorso
+            path.forEach((vertex, index) => {
+                console.log('Creo pulsante ' + index);
+                const btn = document.createElement('button');
+                btn.className = 'path-button';
+                btn.textContent = `Vai a ${vertex.id}`;
+                btn.style.position = 'absolute';
+                btn.style.height = '30px';
+                btn.style.top = `${50 + index * 40}px`; // Posizione verticale con spaziatura
+                btn.style.left = '10px'; // Posizione orizzontale fissa
+
+                // Aggiunge l'evento click al pulsante
+                btn.addEventListener('click', () => {
+                    goToVertex(vertex);
+                });
+
+                container.appendChild(btn);
+            });
+        }
+
+        function getGraphVertices() {
+            let vertices = [];
+
+            if (!graph) {
+                console.warn("Grafo non ancora inizializzato.");
+                return [];
+            }
+
+            // Get all graph verteces
+            for (const vertex of graph.vertices) {
+                console.log(`*** vertex: ${vertex.id}`);
+                vertices.push(vertex);
+            }
+
+            console.log('Totale vertici nel grafo:', vertices.length);
+
+            return vertices;
+        }
+
+        function setEdges() {
+            let vertices = getGraphVertices();
+
+            let edgeCount = 0;
+
+            for (let i = 0; i < vertices.length; i++) {
+                for (let j = i + 1; j < vertices.length; j++) {
+                    graph.setEdge({ src: vertices[i], dst: vertices[j], weight: 1 });
+                    console.log(`Aggiungo arco: ${vertices[i].id} -> ${vertices[j].id}`);
+                    edgeCount++;
+                }
+            }
+
+            console.log('Totale archi nel grafo:', edgeCount);
+        }
+
+        function findPath(startVertex, endVertex) {
+            const aStarRunner = sdk.Graph.createAStarRunner(graph, startVertex, endVertex);
+            const result = aStarRunner.exec();
+
+            if (result.path && result.path.length > 0) {
+                const pathIds = result.path.map(v => v.id);
+                console.log(`Percorso più breve da ${startVertex.id} a ${endVertex.id}: ${pathIds.join(' -> ')}`);
+                createPathButtons(result.path);
+            } else {
+                console.log(`Nessun percorso trovato da ${startVertex.id} a ${endVertex.id}.`);
+            }
+            iframe.focus();
         }
     </script>
 </body>
