@@ -41,235 +41,48 @@
             position: absolute;
             height: 30px;
         }
+
+        #startPath1 {
+            position: absolute;
+            height: 30px;
+            right: 10px;
+            top: 50px;
+        }
+
+        #startPath2 {
+            position: absolute;
+            height: 30px;
+            right: 10px;
+            top: 100px;
+        }
     </style>
 </head>
 
 <body>
-    <button id="initBtn" onclick="init()">Inizializza</button>
     <button id="path" type="button">Stampa percorso</button>
+    <button id="startPath1" type="button">Inizia percorso per Stanza</button>
+    <button id="startPath2" type="button">Inizia percorso per Scaffale</button>
     <div id="path-buttons-container"></div>
 
 
     <!-- HOME YKt7NUHjP4c -->
     <!-- RAV ZQ7sYhu3mQE -->
-    <iframe id="showcase" src="https://my.matterport.com/show/?m=ZQ7sYhu3mQE" allowfullscreen
+    <!-- Piangipane 2FESsSn5irZS -->
+    <!-- Piangipane modificato s1NFdaHWTHz -->
+    <iframe id="showcase" src="https://my.matterport.com/show/?m=s1NFdaHWTHz&play=1" allowfullscreen
         allow="xr-spatial-tracking; accelerometer; gyroscope"></iframe>
 
-    <!-- <script src="bundle/sdk-bundle.js"></script> -->
+    <!-- <script src="bundle/sdk.d.ts"></script> -->
     <script type="text/javascript" src="https://static.matterport.com/showcase-sdk/latest.js"></script>
-
+    <!-- Load our JavaScript files -->
+    <script type="module" src="js/main.js"></script>
     <script>
-        const buttonPath = document.getElementById('path');
-        const iframe = document.getElementById('showcase');
-        var container = document.getElementById('path-buttons-container');
-
-        let sdk = null;
-        let graph = null;
-
-        document.getElementById('initBtn').disabled = true;
-
-        iframe.addEventListener('load', async () => {
-
-            try {
-                sdk = await window.MP_SDK.connect(iframe, 'beyaptx90idi0amgighxdu00a', '2.5');
-                console.log('SDK connesso');
-
-                // Debug: mostra posizione iniziale
-                // const pos = await sdkPlayer.Camera.getPosition();
-                // console.log('Posizione iniziale:', pos);
-
-                // Creazione del grafo
-                graph = sdk.Graph.createDirectedGraph();
-                document.getElementById('initBtn').disabled = false;
-
-
-                sdk.Camera.pose.subscribe(function (pose) {
-                    // Changes to the Camera pose have occurred.
-                    console.log('Current position is ', pose.position);
-                    console.log('Rotation angle is ', pose.rotation);
-                    console.log('Sweep UUID is ', pose.sweep);
-                    console.log('View mode is ', pose.mode);
-                });
-
-                console.log('Grafo creato:', graph);
-            } catch (e) {
-                console.error('Errore nella connessione SDK:', e);
-            }
+        // Initialize the application when the iframe loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const iframe = document.getElementById('showcase');
+            iframe.addEventListener('load', window.initializeApp);
         });
 
-        // Init method async
-        async function init() {
-            await obtainMattertags();
-            // await getGraphVertices();
-            setEdges();
-
-            buttonPath.addEventListener('click', function () {
-                let vertices = getGraphVertices();
-                findPath(vertices[0], vertices[vertices.length - 1]);
-            });
-        }
-
-        async function obtainMattertags() {
-            if (!sdk) {
-                alert('SDK non ancora pronto.');
-                return;
-            }
-
-            try {
-                const tags = await sdk.Mattertag.getData();
-                console.log('Mattertags trovati:', tags);
-                tags.forEach((tag, index) => {
-
-                    // console.log(`--- Mattertag #${index + 1} ---`);
-                    // console.log(`ID: ${tag.sid}`);
-                    // console.log(`Titolo: ${tag.label}`);
-                    // console.log(`Descrizione: ${tag.description}`);
-                    // console.log(`Posizione: x=${tag.anchorPosition.x}, y=${tag.anchorPosition.y}, z=${tag.anchorPosition.z}`);
-                    // console.log(`Colore: ${JSON.stringify(tag.color)}`);
-                    // console.log(`URL: ${tag.url}`);
-                    // console.log('--------------------------');
-
-                    /// Aggiungi punto al grafo
-                    if (graph) {
-                        console.log(`Aggiungo punto al grafo:  ${tag.sid}`);
-                        graph.addVertex({
-                            id: tag.label,
-                            data:
-                            {
-                                x: tag.anchorPosition.x,
-                                y: tag.anchorPosition.y,
-                                z: tag.anchorPosition.z
-                            }
-                        });
-                    }
-
-                });
-
-
-                // Stampa tutti i vertex del grafo
-                console.log('Vertex del grafo:', graph.getVertices());
-
-                alert(`Trovati ${tags.length} Mattertag(s). Controlla la console.`);
-            } catch (e) {
-                console.error('Errore nel recupero dei Mattertag:', e);
-            }
-
-
-        }
-
-        function goToVertex(vertex) {
-            console.log(`Navigazione verso il vertice: ${vertex.id}`);
-            // Esegui l'azione desiderata, ad esempio spostare la visuale
-            const mode = sdk.Mode.Mode.DOLLHOUSE;
-            const transition = sdk.Mode.TransitionType.FLY;
-            // const zoom = 5;
-
-            sdk.Mode.moveTo(mode, {
-                position: vertex.data,
-                transition: transition,
-                // zoom,
-            });
-        }
-        // function goToVertex(vertex) {
-        //     if (!sdk || !sdk.Camera) {
-        //         console.warn('SDK non pronto o modulo Camera non disponibile.');
-        //         return;
-        //     }
-
-        //     console.log(`Navigazione verso il vertice: ${vertex.id}`);
-
-        //     const position = {
-        //         x: vertex.data.x,
-        //         y: vertex.data.y,
-        //         z: vertex.data.z,
-        //         rotation: { x: 0, y: 0, z: 0 } // oppure personalizza la rotazione se vuoi
-        //     };
-
-        //     sdk.Camera.moveTo(position, {
-        //         transition: 'fly', // puoi usare anche 'smooth' o 'instant'
-        //         time: 2000
-        //     }).then(() => {
-        //         console.log(`Spostato con successo a ${vertex.id}`);
-        //     }).catch(err => {
-        //         console.error('Errore nello spostamento:', err);
-        //     });
-        // }
-
-
-        function createPathButtons(path) {
-            console.log('Creo pulsanti');
-            // Rimuove i pulsanti precedenti
-            const existingButtons = document.querySelectorAll('.path-button');
-            existingButtons.forEach(btn => btn.remove());
-
-            // Crea nuovi pulsanti per ogni vertice nel percorso
-            path.forEach((vertex, index) => {
-                console.log('Creo pulsante ' + index);
-                const btn = document.createElement('button');
-                btn.className = 'path-button';
-                btn.textContent = `Vai a ${vertex.id}`;
-                btn.style.position = 'absolute';
-                btn.style.height = '30px';
-                btn.style.top = `${50 + index * 40}px`; // Posizione verticale con spaziatura
-                btn.style.left = '10px'; // Posizione orizzontale fissa
-
-                // Aggiunge l'evento click al pulsante
-                btn.addEventListener('click', () => {
-                    goToVertex(vertex);
-                });
-
-                container.appendChild(btn);
-            });
-        }
-
-        function getGraphVertices() {
-            let vertices = [];
-
-            if (!graph) {
-                console.warn("Grafo non ancora inizializzato.");
-                return [];
-            }
-
-            // Get all graph verteces
-            for (const vertex of graph.vertices) {
-                console.log(`*** vertex: ${vertex.id}`);
-                vertices.push(vertex);
-            }
-
-            console.log('Totale vertici nel grafo:', vertices.length);
-
-            return vertices;
-        }
-
-        function setEdges() {
-            let vertices = getGraphVertices();
-
-            let edgeCount = 0;
-
-            for (let i = 0; i < vertices.length; i++) {
-                for (let j = i + 1; j < vertices.length; j++) {
-                    graph.setEdge({ src: vertices[i], dst: vertices[j], weight: 1 });
-                    console.log(`Aggiungo arco: ${vertices[i].id} -> ${vertices[j].id}`);
-                    edgeCount++;
-                }
-            }
-
-            console.log('Totale archi nel grafo:', edgeCount);
-        }
-
-        function findPath(startVertex, endVertex) {
-            const aStarRunner = sdk.Graph.createAStarRunner(graph, startVertex, endVertex);
-            const result = aStarRunner.exec();
-
-            if (result.path && result.path.length > 0) {
-                const pathIds = result.path.map(v => v.id);
-                console.log(`Percorso più breve da ${startVertex.id} a ${endVertex.id}: ${pathIds.join(' -> ')}`);
-                createPathButtons(result.path);
-            } else {
-                console.log(`Nessun percorso trovato da ${startVertex.id} a ${endVertex.id}.`);
-            }
-            iframe.focus();
-        }
     </script>
 </body>
 
