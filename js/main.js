@@ -1,5 +1,5 @@
 import { distance3D } from './utils.js';
-import { createGraph, getVertexById } from './graph_utils.js';
+import { createGraph, getVertexById, drawPath } from './graph_utils.js';
 import { Tour } from './tour.js';
 
 // Global variables
@@ -102,6 +102,9 @@ window.initializeApp = async () => {
             });
 
             const path = findPath(initialVertex, endVertex, destinationTag);
+            if (path != null) {
+                await drawPath(sdk, path);
+            }
             console.log('PATH:', path);
 
             if (path && path.length > 0) {
@@ -125,6 +128,9 @@ window.initializeApp = async () => {
             });
 
             const path = findPath(initialVertex, endVertex, destinationTag);
+            if (path != null) {
+                await drawPath(sdk, path);
+            }
             console.log('PATH:', path);
 
             showTourSteps(path, destinationTag);
