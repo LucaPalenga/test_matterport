@@ -91,7 +91,9 @@ window.initializeApp = async () => {
             });
 
             const path = findPath(initialVertex, endVertex, destinationTag);
-            await drawPath(sdk, path);
+            if (path != null) {
+                await drawPath(sdk, path);
+            }
             console.log('PATH:', path);
 
             if (path && path.length > 0) {
@@ -115,6 +117,9 @@ window.initializeApp = async () => {
             });
 
             const path = findPath(initialVertex, endVertex, destinationTag);
+            if (path != null) {
+                await drawPath(sdk, path);
+            }
             console.log('PATH:', path);
 
             showTourSteps(path, destinationTag);
