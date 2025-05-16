@@ -1,4 +1,10 @@
 
+
+// Get vertex by ID from the graph
+function getVertexById(graph, id) {
+    return graph.vertices.find(v => v.id === id);
+}
+
 async function createGraph(sdk) {
     console.log("Creating graph")
     const graph = sdk.Graph.createDirectedGraph()
@@ -155,4 +161,4 @@ async function createGraph(sdk) {
     return graph
 }
 
-export { createGraph }
+export { createGraph, getVertexById }

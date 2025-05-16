@@ -41,6 +41,7 @@ function distance3D(p1, p2) {
 
     return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
+
 function debugDrawDirection(sdk, from, to, label = 'Direzione') {
     if (!sdk) {
         console.error('SDK non inizializzato');

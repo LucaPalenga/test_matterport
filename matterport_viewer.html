@@ -26,11 +26,6 @@
             z-index: 1000;
         }
 
-        #path {
-            position: absolute;
-            height: 30px;
-        }
-
         #initBtn {
             position: absolute;
             right: 10px;
@@ -55,15 +50,43 @@
             right: 10px;
             top: 100px;
         }
+
+        #tour-steps-container {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            background-color: transparent;
+            /* Sfondo trasparente */
+            padding: 10px;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .step-button {
+            background-color: rgba(255, 255, 255, 0.1);
+            /* Sfondo semitrasparente */
+            color: #222;
+            border: 1px solid #ccc;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .step-button:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
     </style>
 </head>
 
 <body>
-    <button id="path" type="button">Stampa percorso</button>
-    <button id="startPath1" type="button">Inizia percorso per Stanza</button>
-    <button id="startPath2" type="button">Inizia percorso per Scaffale</button>
+    <button id="startPath1" type="button">Inizia percorso per Scaffale</button>
+    <button id="startPath2" type="button">Inizia percorso per Sala</button>
+    <div id="tour-steps-container" style="margin-top: 20px; padding: 10px;"></div>
     <div id="path-buttons-container"></div>
-
 
     <!-- HOME YKt7NUHjP4c -->
     <!-- RAV ZQ7sYhu3mQE -->

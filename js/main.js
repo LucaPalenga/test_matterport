@@ -1,12 +1,10 @@
-import { computeYaw, distance3D, debugDrawDirection, pointAt, calculateYawAngle } from './utils.js';
-import { createGraph } from './graph_utils.js';
+import { distance3D } from './utils.js';
+import { createGraph, getVertexById } from './graph_utils.js';
 
 // Global variables
-const buttonPath = document.getElementById('path');
 const buttonPath1 = document.getElementById('startPath1');
 const buttonPath2 = document.getElementById('startPath2');
 const iframe = document.getElementById('showcase');
-const container = document.getElementById('path-buttons-container');
 
 let sdk = null;
 let modelData = null;
@@ -15,6 +13,7 @@ let initialSweep = null;
 
 let mattertags = null;
 
+let currentSweep = null;
 let currentPose = null;
 
 // Map that associates mattertag -> closest sweep
@@ -22,11 +21,12 @@ const endSweepsMap = new Map();
 
 // Initialize the application when the iframe loads
 window.initializeApp = async () => {
-    buttonPath.disabled = true;
+    buttonPath1.disabled = true;
+    buttonPath2.disabled = true;
 
     try {
         console.log('Connecting SDK...');
-        sdk = await window.MP_SDK.connect(iframe, 'beyaptx90idi0amgighxdu00a', '2.5');
+        sdk = await window.MP_SDK.connect(iframe, 'x02q4mq2nsac7euge3234nhec', '3.5');
         console.log('SDK connected');
 
         modelData = await sdk.Model.getData();
@@ -41,73 +41,48 @@ window.initializeApp = async () => {
 
         sdk.Camera.pose.subscribe(function (pose) {
             // Changes to the Camera pose have occurred.
-            // console.log('Current position is ', pose.position);
-            // console.log('Rotation angle is ', pose.rotation);
-            // console.log('View mode is ', pose.mode);
             currentPose = pose;
+            // console.log('Current rotation:', pose.rotation);
+            if (initialSweep) {
+                // console.log('Current position is ', pose.position);
+                // console.log('Rotation angle is ', pose.rotation);
+                // console.log('View mode is ', pose.mode);
+            }
         });
 
 
-        sdk.Sweep.current.subscribe(function (currentSweep) {
+        sdk.Sweep.current.subscribe(function (sweep) {
             // Change to the current sweep has occurred.
-            if (currentSweep.sid === '') {
+            if (sweep.sid === '') {
                 // console.log('Not currently stationed at a sweep position');
             } else {
-                console.log('Current sweep:', currentSweep);
-                // Save initial position
-                // if (!initialSweep) {
-                initialSweep = currentSweep;
-                // console.log('Initial position saved:', initialSweep);
-                // Unlock path button
-                buttonPath.disabled = false;
-
-                // }
-            }
-        });
-
-
-        buttonPath.addEventListener('click', async function () {
-            mattertags.forEach((mattertag) => {
-                let closestSweep = findClosestSweep(mattertag);
-                console.log(`Closest sweep for mattertag "${mattertag.label}":`, closestSweep);
-                endSweepsMap.set(mattertag, closestSweep);
-            });
-
-            console.log('Mappa mattertag -> sweep più vicino:', endSweepsMap);
-
-            // For each end sweep find the shortest path
-            const pathsTags = new Map();
-            let pathButtonsCount = 0;
-
-            for (const [tag, endSweep] of endSweepsMap.entries()) {
-                console.log(`--- Percorso verso Mattertag: ${tag.label} ---`);
-                console.log('INITIAL SWEEP:', initialSweep);
-                console.log('END SWEEP:', endSweep);
-
-                const startVertex = getVertexById(sweepGraph, initialSweep.sid);
-                const endVertex = getVertexById(sweepGraph, endSweep.sid);
-
-                console.log('START VERTEX:', startVertex);
-                console.log('END VERTEX:', endVertex);
-
-                const path = findPath(startVertex, endVertex, tag);
-                if (path) {
-                    pathsTags.set(tag, path);
-                    createPathButtons(path, tag, pathButtonsCount);
-                    pathButtonsCount++;
+                // Save initial sweep
+                if (!initialSweep) {
+                    initialSweep = sweep;
                 }
-            }
 
-            console.log('Paths:', pathsTags);
+                // Updates current sweep
+                currentSweep = sweep;
+                console.log('Current sweep:', sweep);
+
+                // Unlock path button
+                buttonPath1.disabled = false;
+                buttonPath2.disabled = false;
+
+                // console.log('Current position is ', currentPose.position);
+                // console.log('Rotation angle is ', currentPose.rotation);
+                // console.log('View mode is ', currentPose.mode);
+            }
         });
 
-        buttonPath2.addEventListener('click', async function () {
+        buttonPath1.addEventListener('click', async function () {
+            const destinationTag = mattertags[1];
             const initialVertex = getVertexById(sweepGraph, 'h04mrb8euskemttx9ysdkqyhb');
             // const initialVertex = getVertexById(sweepGraph, initialSweep.sid);
-            const endVertex = getVertexById(sweepGraph, findClosestSweep(mattertags[0]).sid);
+            const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
             console.log('INITIAL SWEEP:', initialVertex);
             console.log('END SWEEP:', endVertex);
-            console.log('TAG:', mattertags[0]);
+            console.log('TAG:', mattertags[1]);
 
             // Move to initial sweep
             sdk.Sweep.moveTo(initialVertex.id, {
@@ -115,15 +90,34 @@ window.initializeApp = async () => {
                 transitionTime: 2000,
             });
 
-            const path = findPath(initialVertex, endVertex, mattertags[0]);
+            const path = findPath(initialVertex, endVertex, destinationTag);
             console.log('PATH:', path);
 
-            runTour(path, mattertags[0]);
+            if (path && path.length > 0) {
+                showTourSteps(path, destinationTag);
+            }
         });
 
-        // buttonPath1.addEventListener('click', async function () {
-        //     runTour(pathsTags.get(endSweepsMap.get('Scaffale')));
-        // });
+        buttonPath2.addEventListener('click', async function () {
+            const destinationTag = mattertags[0];
+            const initialVertex = getVertexById(sweepGraph, 'gaqergp0bmzw5sebb8hzf9cid');
+            // const initialVertex = getVertexById(sweepGraph, initialSweep.sid);
+            const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
+            console.log('INITIAL SWEEP:', initialVertex);
+            console.log('END SWEEP:', endVertex);
+            console.log('TAG:', mattertags[1]);
+
+            // Move to initial sweep
+            sdk.Sweep.moveTo(initialVertex.id, {
+                transition: sdk.Sweep.Transition.FLY,
+                transitionTime: 2000,
+            });
+
+            const path = findPath(initialVertex, endVertex, destinationTag);
+            console.log('PATH:', path);
+
+            showTourSteps(path, destinationTag);
+        });
 
     } catch (e) {
         console.error('Error connecting SDK:', e);
@@ -148,50 +142,6 @@ function findClosestSweep(tag) {
     return closestSweep;
 }
 
-// Create buttons for each path
-function createPathButtons(path, destinationTag, pathButtonsCount) {
-    console.log('Creo pulsanti');
-    console.log('PATH:', path);
-    console.log('DESTINATION TAG:', destinationTag);
-
-    console.log('Creo pulsante ' + pathButtonsCount);
-    const btn = document.createElement('button');
-    btn.className = 'path-button';
-    btn.textContent = `Vai a ${destinationTag.label}`;
-    btn.style.position = 'absolute';
-    btn.style.height = '30px';
-    btn.style.top = `${50 + pathButtonsCount * 40}px`; // Vertical position with spacing
-    btn.style.left = '10px'; // Fixed horizontal position
-
-    // Add click event to the button
-    btn.addEventListener('click', () => {
-        if (path && path.length > 0) {
-            runTour(path, destinationTag);
-        }
-    });
-
-    container.appendChild(btn);
-}
-
-// Get sweepGraph vertices
-function getSweepGraphVertices() {
-    let vertices = [];
-
-    if (!sweepGraph) {
-        console.warn("Grafo sweep non ancora inizializzato.");
-        return [];
-    }
-
-    // Get all graph vertices
-    for (const vertex of sweepGraph.vertices) {
-        console.log(`*** vertex: ${vertex.id}`);
-        vertices.push(vertex);
-    }
-
-    console.log('Totale vertici nel grafo:', vertices.length);
-    return vertices;
-}
-
 // Find the shortest path between two sweeps
 function findPath(startVertex, endVertex, tag) {
     if (!startVertex || !endVertex) {
@@ -213,215 +163,111 @@ function findPath(startVertex, endVertex, tag) {
     }
 }
 
-// Get vertex by ID from the graph
-function getVertexById(graph, id) {
-    return graph.vertices.find(v => v.id === id);
-}
+// async function runAutomaticTour(path, tag) {
+//     if (!Array.isArray(path) || path.length === 0) {
+//         console.warn('Percorso vuoto o non valido.');
+//         return;
+//     }
 
-// async function runTour(path, tag) {
+//     if (!tag || !tag.anchorPosition) {
+//         console.error('Tag non valido o senza anchorPosition');
+//         return;
+//     }
+
 //     for (let i = 0; i < path.length; i++) {
 //         const vertex = path[i];
 //         const nextVertex = path[i + 1];
 
 //         const currentPos = vertex.data.position;
-//         const nextPos = nextVertex ? nextVertex.data.position : null;
 
-//         let rotation = vertex.data.rotation;
-//         if (nextPos) {
-//             rotation = {
-//                 x: rotation.x,
-//                 y: computeYaw(currentPos, nextPos),
-//                 z: rotation.z
-//             };
+//         if (nextVertex) {
+//             const nextPos = nextVertex.data.position;
+//             console.log(`Step ${i + 1}: ruoto verso prossimo sweep`);
+//             rotateCameraBetween(currentPos, nextPos);
+//         } else {
+//             console.log(`Ultimo step: ruoto verso Mattertag`);
+//             rotateCameraBetween(currentPos, tag.anchorPosition);
 //         }
 
 //         sdk.Sweep.moveTo(vertex.id, {
 //             transition: sdk.Sweep.Transition.FLY,
 //             transitionTime: 1000,
-//             rotation: rotation,
 //         });
 
-//         await delay(2000); // Attendi meno, così è più fluido
+//         await delay(2000); // Attendi per la transizione
 //     }
 
-// async function runTour(path, tag) {
-//     for (let i = 0; i < path.length; i++) {
-//         const vertex = path[i];
-//         const nextVertex = path[i + 1];
-
-//         const currentPos = vertex.data.position;
-//         const nextPos = nextVertex ? nextVertex.data.position : null;
-
-//         if (nextPos) {
-//             const yaw = computeYaw(currentPos, nextPos);
-//             sdk.Camera.rotate(yaw, 0, { speed: 2 }); // Ruota verso il prossimo sweep
-//             await debugDrawDirection(sdk, currentPos, nextPos, 'Verso prossimo sweep');
-
-//             await delay(500); // Attendi un attimo per rendere fluida la rotazione
-//         }
-
-//         let rotation = vertex.data.rotation;
-//         if (nextPos) {
-//             rotation = {
-//                 x: rotation.x,
-//                 y: computeYaw(currentPos, nextPos),
-//                 z: rotation.z
-//             };
-//         }
-
-//         sdk.Sweep.moveTo(vertex.id, {
-//             transition: sdk.Sweep.Transition.FLY,
-//             transitionTime: 1000,
-//             rotation: rotation,
-//         });
-
-//         await delay(2000);
-//     }
-
-//     // Alla fine del tour, punta la camera verso il Mattertag
-//     if (tag && tag.anchorPosition) {
-//         pointCameraToTag(path[path.length - 1].data.position, tag);
-//     }
-
-//     console.log("Tour completato");
+//     console.log("Tour automatico completato.");
 // }
 
-async function runTour(path, tag) {
-    // Assicurati che il tag sia valido
-    if (!tag || !tag.anchorPosition) {
-        console.error('Tag non valido o senza posizione anchor');
+function showTourSteps(path, tag) {
+    const stepsContainer = document.getElementById('tour-steps-container');
+    stepsContainer.innerHTML = ''; // Pulisce la lista precedente
+
+    path.forEach((vertex, index) => {
+        const stepButton = document.createElement('button');
+        stepButton.className = 'step-button';
+        stepButton.textContent = `Tappa ${index + 1}`;
+
+        stepButton.addEventListener('click', () => {
+            const nextVertex = path[index + 1];  // Prossimo sweep (se esiste)
+
+            console.log('Current step:', vertex);
+
+            if (!nextVertex) {
+                console.log('Next step: nessun prossimo step (ultimo)');
+
+                // PUNTA al mattertag invece che al prossimo vertex
+                rotateCameraBetween(vertex.data.position, tag.anchorPosition);
+
+                sdk.Sweep.moveTo(vertex.id, {
+                    transition: sdk.Sweep.Transition.FLY,
+                    transitionTime: 1000,
+                });
+
+                return;
+            }
+
+            if (vertex.id === nextVertex.id) {
+                console.log('Sweep già occupato');
+                // sdk.Camera.rotate(0, 0, { speed: 200 });
+                return;
+            }
+
+            console.log('Current rotation: ', currentPose.rotation);
+            rotateCameraBetween(vertex.data.position, nextVertex.data.position);
+
+            sdk.Sweep.moveTo(vertex.id, {
+                transition: sdk.Sweep.Transition.FLY,
+                transitionTime: 1000,
+            });
+
+            console.log(`Spostato a sweep ${vertex.id}`);
+        });
+
+        stepsContainer.appendChild(stepButton);
+    });
+}
+
+function rotateCameraBetween(fromPos, toPos) {
+    if (!fromPos || !toPos) {
+        console.warn('Posizioni non valide per la rotazione');
         return;
     }
 
-    // Per ogni "vertex" nel percorso, spostiamo la camera
-    for (let i = 0; i < path.length; i++) {
-        const vertex = path[i];
-        const nextVertex = path[i + 1];
+    const dx = toPos.x - fromPos.x;
+    const dy = toPos.y - fromPos.y;
+    const dz = toPos.z - fromPos.z;
 
-        const currentPos = vertex.data.position;
-        const currentRotation = vertex.data.rotation;
-        const nextPos = nextVertex ? nextVertex.data.position : null;
+    // Yaw (asse Y) + 180° per correggere direzione
+    let yaw = Math.atan2(dx, dz) * (180 / Math.PI) + 180;
+    yaw = ((yaw + 180) % 360) - 180;  // Normalizzazione tra -180 e 180
 
-        let arrow = null;
+    // Pitch (asse X)
+    const distanceXZ = Math.sqrt(dx * dx + dz * dz);
+    const pitch = Math.atan2(dy, distanceXZ) * (180 / Math.PI);
 
-        // if (nextPos) {
-        //     // Ruotiamo la fotocamera verso il prossimo sweep
-        //     // const yaw = computeYaw(currentPos, nextPos);
-        //     // sdk.Camera.rotate(yaw, 0, { speed: 2 });
+    console.log('→ Camera Rotation: pitch:', pitch.toFixed(2), 'yaw:', yaw.toFixed(2));
 
-        //     // Disegna la direzione della freccia di debug
-        //     arrow = await debugDrawDirection(sdk, currentPos, nextPos, 'Verso prossimo sweep');
-        //     await delay(500); // Attendi un attimo per rendere fluida la rotazione
-        // }
-
-        // // Imposta la rotazione della fotocamera per il prossimo sweep
-        // let rotation = vertex.data.rotation;
-        // if (nextPos) {
-        //     rotation = {
-        //         x: rotation.x,
-        //         y: computeYaw(currentPos, nextPos),
-        //         z: rotation.z
-        //     };
-        // }
-
-        // Alla fine di ogni spostamento, punta la fotocamera verso il Mattertag di debug
-        // pointCameraToTag(vertex.data.position, arrow);
-        // Calcola gli angoli di rotazione
-        // const { yaw, pitch } = pointAt(currentPos, nextPos);
-
-        // Applica la rotazione
-        // sdk.Camera.rotate(yaw, pitch, { speed: 2 });
-
-        console.log('Current rotation:', currentRotation);
-
-        const yawAngle = calculateYawAngle(currentPos.x, currentPos.z, nextPos.x, nextPos.z);
-
-        console.log('Angolo di rotazione lungo l\'asse Y (gradi):', yawAngle);
-
-        // sdk.Camera.rotate(yawAngle, 0, { speed: 20 });
-        sdk.Camera.setRotation({ x: currentPos.x, y: currentPos.y + yawAngle }, { speed: 2000 })
-
-        // Spostati al prossimo sweep
-        sdk.Sweep.moveTo(vertex.id, {
-            transition: sdk.Sweep.Transition.FLY,
-            transitionTime: 1000,
-            // rotation: rotation,
-        });
-
-        await delay(2000);
-    }
-
-    console.log("Tour completato");
-    // pointCameraToTag(tag.anchorPosition, tag);
+    sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: 200 });
 }
-
-// Funzione per puntare la fotocamera al Mattertag
-function pointCameraToTag(position, tag) {
-    if (!tag || !tag.anchorPosition) return;
-
-    const tagPosition = tag.anchorPosition;  // Posizione del Mattertag
-
-    console.log("Tag position: ", tagPosition);
-
-    // Calcola la direzione per ruotare la fotocamera verso il Mattertag
-    const yaw = computeYaw(position, tagPosition);
-
-    console.log("Yaw: ", yaw);
-
-    // Ruota la fotocamera verso il Mattertag
-    sdk.Camera.rotate(yaw, 0, { speed: 2 });
-}
-
-
-// function pointCameraToTag(fromPosition, tag) {
-//     const yaw = computeYaw(fromPosition, tag.anchorPosition);
-//     sdk.Camera.rotate(yaw, 0, { speed: 2 });
-//     console.log("Point to tag: ", tag.label);
-// }
-
-
-// // Run a tour through a path of sweeps
-// async function runTour(path) {
-//     // Starts from 1 because first vertex is the initial position
-//     for (let i = 1; i < path.length; i++) {
-//         const vertex = path[i];
-//         const nextVertex = path[i + 1];
-
-//         const currentPos = vertex.data.position;
-//         const nextPos = nextVertex ? nextVertex.data.position : null;
-
-//         let rotation = { x: vertex.data.rotation.x, y: vertex.data.rotation.y, z: vertex.data.rotation.z };
-//         if (nextPos) {
-//             // Calculate the rotation on the Y axis
-//             rotation.y = computeYaw(currentPos, nextPos);
-//         }
-
-//         // sdk.Camera.rotate(rotation.y, rotation.x, { speed: 2 });
-
-//         sdk.Sweep.moveTo(vertex.id, {
-//             transition: sdk.Sweep.Transition.SLIDE,
-//             rotation: rotation,
-//             transitionTime: 2000,
-//         });
-
-//         // Wait 3 seconds before moving to the next vertex
-//         await delay(3000);
-//     }
-
-//     console.log("Tour completed!");
-// }
-
-// Utility function to create a delay
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Make functions available globally for HTML event handlers
-// window.findClosestSweep = findClosestSweep;
-// window.createPathButtons = createPathButtons;
-// window.getSweepGraphVertices = getSweepGraphVertices;
-// window.findPath = findPath;
-// window.getVertexById = getVertexById;
-// window.runTour = runTour;
-// window.delay = delay;
-
