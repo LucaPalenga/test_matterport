@@ -1,6 +1,8 @@
 import { distance3D } from './utils.js';
 import { createGraph, getVertexById, drawPath } from './graph_utils.js';
 import { Tour } from './tour.js';
+// import CameraManager from './mp_sdk_manager.js';
+
 
 // Global variables
 const buttonPath1 = document.getElementById('startPath1');
@@ -34,6 +36,7 @@ window.initializeApp = async () => {
         console.log('Connecting SDK...');
         sdk = await window.MP_SDK.connect(iframe, 'x02q4mq2nsac7euge3234nhec', '3.5');
         console.log('SDK connected');
+        // window.cameraManager = new CameraManager(sdk);
 
         modelData = await sdk.Model.getData();
         mattertags = await sdk.Mattertag.getData();
@@ -42,7 +45,7 @@ window.initializeApp = async () => {
         nextButton = document.getElementById('nextButton');
         prevButton = document.getElementById('prevButton');
 
-        createMattertagsButtons();
+        // createMattertagsButtons();
 
         // Create graph
         // sweepGraph = await sdk.Sweep.createDirectedGraph();
@@ -86,54 +89,12 @@ window.initializeApp = async () => {
             }
         });
 
-        buttonPath1.addEventListener('click', async function () {
-            const destinationTag = mattertags[1];
-            const initialVertex = getVertexById(sweepGraph, 'h04mrb8euskemttx9ysdkqyhb');
-            // const initialVertex = getVertexById(sweepGraph, initialSweep.sid);
-            const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
-            console.log('INITIAL SWEEP:', initialVertex);
-            console.log('END SWEEP:', endVertex);
-            console.log('TAG:', mattertags[1]);
-
-            // Move to initial sweep
-            sdk.Sweep.moveTo(initialVertex.id, {
-                transition: sdk.Sweep.Transition.FLY,
-                transitionTime: 2000,
-            });
-
-            const path = findPath(initialVertex, endVertex, destinationTag);
-            if (path != null) {
-                await drawPath(sdk, path);
-            }
-            console.log('PATH:', path);
-
-            if (path && path.length > 0) {
-                showTourSteps(path, destinationTag);
-            }
+        buttonPath1.addEventListener('click', function () {
+            startPCRoomNavigation();
         });
 
         buttonPath2.addEventListener('click', async function () {
-            const destinationTag = mattertags[0];
-            const initialVertex = getVertexById(sweepGraph, 'gaqergp0bmzw5sebb8hzf9cid');
-            // const initialVertex = getVertexById(sweepGraph, initialSweep.sid);
-            const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
-            console.log('INITIAL SWEEP:', initialVertex);
-            console.log('END SWEEP:', endVertex);
-            console.log('TAG:', mattertags[1]);
-
-            // Move to initial sweep
-            sdk.Sweep.moveTo(initialVertex.id, {
-                transition: sdk.Sweep.Transition.FLY,
-                transitionTime: 2000,
-            });
-
-            const path = findPath(initialVertex, endVertex, destinationTag);
-            if (path != null) {
-                await drawPath(sdk, path);
-            }
-            console.log('PATH:', path);
-
-            showTourSteps(path, destinationTag);
+            await startReceptionNavigation();
         });
 
     } catch (e) {
@@ -141,32 +102,32 @@ window.initializeApp = async () => {
     }
 };
 
-// Create mattertags tour buttons
-function createMattertagsButtons() {
-    const buttonsContainer = document.getElementById('buttons-container');
-    buttonsContainer.innerHTML = ''; // Pulisce i bottoni esistenti
+// // Create mattertags tour buttons
+// function createMattertagsButtons() {
+//     const buttonsContainer = document.getElementById('buttons-container');
+//     buttonsContainer.innerHTML = ''; // Pulisce i bottoni esistenti
 
-    mattertags.forEach((tag, index) => {
-        const button = document.createElement('button');
-        button.textContent = `Vai a ${tag.label || `Tappa ${index + 1}`}`;
-        button.addEventListener('click', () => {
-            const destinationTag = tag;
-            const initialVertex = getVertexById(sweepGraph, currentSweep.sid);
-            const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
+//     mattertags.forEach((tag, index) => {
+//         const button = document.createElement('button');
+//         button.textContent = `Vai a ${tag.label || `Tappa ${index + 1}`}`;
+//         button.addEventListener('click', () => {
+//             const destinationTag = tag;
+//             const initialVertex = getVertexById(sweepGraph, currentSweep.sid);
+//             const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
 
-            sdk.Sweep.moveTo(initialVertex.id, {
-                transition: sdk.Sweep.Transition.FLY,
-                transitionTime: 2000,
-            });
+//             sdk.Sweep.moveTo(initialVertex.id, {
+//                 transition: sdk.Sweep.Transition.FLY,
+//                 transitionTime: 2000,
+//             });
 
-            const path = findPath(initialVertex, endVertex, destinationTag);
-            console.log('PATH:', path);
+//             const path = findPath(initialVertex, endVertex, destinationTag);
+//             console.log('PATH:', path);
 
-            currentTour = createTour(path, destinationTag);
-        });
-        buttonsContainer.appendChild(button);
-    });
-}
+//             currentTour = createTour(path, destinationTag);
+//         });
+//         buttonsContainer.appendChild(button);
+//     });
+// }
 
 // Find the closest sweep to a mattertag
 function findClosestSweep(tag) {
@@ -209,24 +170,37 @@ function findPath(startVertex, endVertex, tag) {
 
 // Create tour
 function createTour(path, tag) {
-    const tour = new Tour('Tour ' + tag.label, path, tag);
+    const tour = new Tour(
+        sdk,
+        'Tour ' + tag.label,
+        path,
+        tag,
+    );
 
-    nextButton.hidden = false;
-    prevButton.hidden = false;
+    console.log('Tour created:', tour);
 
     // Aggiungi event listener ai bottoni
     nextButton.addEventListener('click', () => {
-        tour.next();
-        tour.navigateToCurrent(sdk);
+        navigateToNextStep();
+
+        console.log('Tour index:', tour.currentIndex);
+        console.log('Tour current step:', tour.getCurrentStep());
+        console.log('Tour hasNext:', tour.hasNext());
+        console.log('Tour hasPrevious:', tour.hasPrevious());
     });
 
     prevButton.addEventListener('click', () => {
-        tour.previous();
-        tour.navigateToCurrent(sdk);
+        navigateToPreviousStep();
+
+        console.log('Tour index:', tour.currentIndex);
+        console.log('Tour current step:', tour.getCurrentStep());
+        console.log('Tour hasNext:', tour.hasNext());
+        console.log('Tour hasPrevious:', tour.hasPrevious());
     });
 
     return tour;
 }
+
 
 // async function runAutomaticTour(path, tag) {
 //     if (!Array.isArray(path) || path.length === 0) {
@@ -338,74 +312,214 @@ function createTour(path, tag) {
 // }
 
 
-function showTourSteps(path, tag) {
-    const stepsContainer = document.getElementById('tour-steps-container');
-    stepsContainer.innerHTML = ''; // Pulisce la lista precedente
+// function showTourSteps(path, tag) {
+//     const stepsContainer = document.getElementById('tour-steps-container');
+//     stepsContainer.innerHTML = ''; // Pulisce la lista precedente
 
-    path.forEach((vertex, index) => {
-        const stepButton = document.createElement('button');
-        stepButton.className = 'step-button';
-        stepButton.textContent = `Tappa ${index + 1}`;
+//     path.forEach((vertex, index) => {
+//         const stepButton = document.createElement('button');
+//         stepButton.className = 'step-button';
+//         stepButton.textContent = `Tappa ${index + 1}`;
 
-        stepButton.addEventListener('click', () => {
-            const nextVertex = path[index + 1];  // Prossimo sweep (se esiste)
+//         stepButton.addEventListener('click', () => {
+//             const nextVertex = path[index + 1];  // Prossimo sweep (se esiste)
 
-            console.log('Current step:', vertex);
+//             console.log('Current step:', vertex);
 
-            if (!nextVertex) {
-                console.log('Next step: nessun prossimo step (ultimo)');
+//             if (!nextVertex) {
+//                 console.log('Next step: nessun prossimo step (ultimo)');
 
-                // PUNTA al mattertag invece che al prossimo vertex
-                rotateCameraBetween(vertex.data.position, tag.anchorPosition);
+//                 // PUNTA al mattertag invece che al prossimo vertex
+//                 rotateCameraBetween(vertex.data.position, tag.anchorPosition);
 
-                sdk.Sweep.moveTo(vertex.id, {
-                    transition: sdk.Sweep.Transition.FLY,
-                    transitionTime: 1000,
-                });
+//                 sdk.Sweep.moveTo(vertex.id, {
+//                     transition: sdk.Sweep.Transition.FLY,
+//                     transitionTime: 1000,
+//                 });
 
-                return;
-            }
+//                 return;
+//             }
 
-            if (vertex.id === nextVertex.id) {
-                console.log('Sweep già occupato');
-                // sdk.Camera.rotate(0, 0, { speed: 200 });
-                return;
-            }
+//             if (vertex.id === nextVertex.id) {
+//                 console.log('Sweep già occupato');
+//                 // sdk.Camera.rotate(0, 0, { speed: 200 });
+//                 return;
+//             }
 
-            console.log('Current rotation: ', currentPose.rotation);
-            rotateCameraBetween(vertex.data.position, nextVertex.data.position);
+//             console.log('Current rotation: ', currentPose.rotation);
+//             rotateCameraBetween(vertex.data.position, nextVertex.data.position);
 
-            sdk.Sweep.moveTo(vertex.id, {
-                transition: sdk.Sweep.Transition.FLY,
-                transitionTime: 1000,
-            });
+//             sdk.Sweep.moveTo(vertex.id, {
+//                 transition: sdk.Sweep.Transition.FLY,
+//                 transitionTime: 1000,
+//             });
 
-            console.log(`Spostato a sweep ${vertex.id}`);
-        });
+//             console.log(`Spostato a sweep ${vertex.id}`);
+//         });
 
-        stepsContainer.appendChild(stepButton);
-    });
-}
+//         stepsContainer.appendChild(stepButton);
+//     });
+// }
 
-function rotateCameraBetween(fromPos, toPos) {
-    if (!fromPos || !toPos) {
-        console.warn('Posizioni non valide per la rotazione');
-        return;
+// function rotateCameraBetween(fromPos, toPos) {
+//     if (!fromPos || !toPos) {
+//         console.warn('Posizioni non valide per la rotazione');
+//         return;
+//     }
+
+//     const dx = toPos.x - fromPos.x;
+//     const dy = toPos.y - fromPos.y;
+//     const dz = toPos.z - fromPos.z;
+
+//     // Yaw (asse Y) + 180° per correggere direzione
+//     let yaw = Math.atan2(dx, dz) * (180 / Math.PI) + 180;
+//     yaw = ((yaw + 180) % 360) - 180;  // Normalizzazione tra -180 e 180
+
+//     // Pitch (asse X)
+//     const distanceXZ = Math.sqrt(dx * dx + dz * dz);
+//     const pitch = Math.atan2(dy, distanceXZ) * (180 / Math.PI);
+
+//     console.log('→ Camera Rotation: pitch:', pitch.toFixed(2), 'yaw:', yaw.toFixed(2));
+
+//     sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: 200 });
+// }
+
+
+
+// startReceptionNavigation(): si aspetta che il Matterport carichi il percorso dal tavolino bianco della stanza 
+// coi libri alla reception all'ingresso.
+// Il risultato dovrebbe essere l'utente che compare sullo sweep 1 del percorso 
+// (magari sarebbe carino se poi venisse fatta una chiamata per girarlo al punto 2).
+// Gli sweep del percorso dovrebbero essere 10, li ho hardcodati per ora
+async function startReceptionNavigation() {
+    const destinationTag = mattertags[0];
+    const initialVertex = getVertexById(sweepGraph, 'gaqergp0bmzw5sebb8hzf9cid');
+    // const initialVertex = getVertexById(sweepGraph, initialSweep.sid);
+    const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
+    console.log('INITIAL SWEEP:', initialVertex);
+    console.log('END SWEEP:', endVertex);
+    console.log('TAG:', mattertags[1]);
+
+
+
+    const path = findPath(initialVertex, endVertex, destinationTag);
+    if (path != null && path.length > 0) {
+        console.log('PATH:', path);
+        currentTour = createTour(path, destinationTag);
+        currentTour.initialize();
+        drawPath(sdk, path);
+
+        nextButton.hidden = false;
+        prevButton.hidden = false;
     }
-
-    const dx = toPos.x - fromPos.x;
-    const dy = toPos.y - fromPos.y;
-    const dz = toPos.z - fromPos.z;
-
-    // Yaw (asse Y) + 180° per correggere direzione
-    let yaw = Math.atan2(dx, dz) * (180 / Math.PI) + 180;
-    yaw = ((yaw + 180) % 360) - 180;  // Normalizzazione tra -180 e 180
-
-    // Pitch (asse X)
-    const distanceXZ = Math.sqrt(dx * dx + dz * dz);
-    const pitch = Math.atan2(dy, distanceXZ) * (180 / Math.PI);
-
-    console.log('→ Camera Rotation: pitch:', pitch.toFixed(2), 'yaw:', yaw.toFixed(2));
-
-    sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: 200 });
+    else {
+        console.log('Nessun percorso trovato');
+    }
 }
+
+// startPCRoomNavigation(): stesso comportamento del metodo sopra, che parte però dall'ingresso e arriva alla stanza coi PC. 
+// Gli sweep sono 4 ma anche qui me li gestisco da solo
+function startPCRoomNavigation() {
+    const destinationTag = mattertags[1];
+    const initialVertex = getVertexById(sweepGraph, 'h04mrb8euskemttx9ysdkqyhb');
+    // const initialVertex = getVertexById(sweepGraph, initialSweep.sid);
+    const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
+    console.log('INITIAL SWEEP:', initialVertex);
+    console.log('END SWEEP:', endVertex);
+    console.log('TAG:', mattertags[1]);
+
+    const path = findPath(initialVertex, endVertex, destinationTag);
+    if (path != null && path.length > 0) {
+        console.log('PATH:', path);
+        currentTour = createTour(path, destinationTag);
+        currentTour.initialize();
+        drawPath(sdk, path);
+
+        nextButton.hidden = false;
+        prevButton.hidden = false;
+    }
+    else {
+        console.log('Nessun percorso trovato');
+    }
+}
+
+// navigateToPreviousStep(): si muove allo sweep precedente (si aspetta che il percorso esista già, ma non dovrebbe preoccuparci)
+function navigateToPreviousStep() {
+    if (currentTour) {
+        if (currentTour.hasPrevious()) {
+            currentTour.goToPrevious();
+        }
+    }
+}
+
+// navigateToNextStep(): si muove allo sweep successivo
+function navigateToNextStep() {
+    if (currentTour) {
+        // if (currentTour.hasNext()) {
+        currentTour.goToNext();
+        // }
+    }
+}
+
+// resetNavigation(): resetta la navigazione, togliendo il percorso attuale
+function resetNavigation() {
+    if (currentTour) {
+        currentTour.reset();
+    }
+    currentTour = null;
+
+    nextButton.hidden = true;
+    prevButton.hidden = true;
+}
+
+
+
+// function navigateTo(vertex, nextVertex) {
+//     if (!nextVertex) {
+//         console.log('Previous step: nessun prossimo step');
+//         return;
+//     }
+
+//     if (vertex.id === nextVertex.id) {
+//         console.log('Sweep già occupato');
+//         return;
+//     }
+
+//     this.rotateCameraBetween(vertex.data.position, nextVertex.data.position);
+
+//     this.sdk.Sweep.moveTo(vertex.id, {
+//         transition: this.sdk.Sweep.Transition.FLY,
+//         transitionTime: 1000,
+//     });
+// }
+
+
+// function rotateCameraBetween(fromPos, toPos) {
+//     if (!fromPos || !toPos) {
+//         console.warn('Posizioni non valide per la rotazione');
+//         return;
+//     }
+
+//     const dx = toPos.x - fromPos.x;
+//     const dy = toPos.y - fromPos.y;
+//     const dz = toPos.z - fromPos.z;
+
+//     // Yaw (asse Y) + 180° per correggere direzione
+//     let yaw = Math.atan2(dx, dz) * (180 / Math.PI) + 180;
+//     yaw = ((yaw + 180) % 360) - 180;  // Normalizzazione tra -180 e 180
+
+//     // Pitch (asse X)
+//     const distanceXZ = Math.sqrt(dx * dx + dz * dz);
+//     const pitch = Math.atan2(dy, distanceXZ) * (180 / Math.PI);
+
+//     console.log('→ Camera Rotation: pitch:', pitch.toFixed(2), 'yaw:', yaw.toFixed(2));
+
+//     this.sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: 200 });
+// }
+
+
+// Aggiungi cameraManager al window per accedervi da qualsiasi punto
+// window.cameraManager = CameraManager.getInstance();
+
+
+
