@@ -1,5 +1,5 @@
 import { distance3D } from './utils.js';
-import { createGraph, getVertexById } from './graph_utils.js';
+import { createGraph, getVertexById, drawPath } from './graph_utils.js';
 
 // Global variables
 const buttonPath1 = document.getElementById('startPath1');
@@ -91,6 +91,7 @@ window.initializeApp = async () => {
             });
 
             const path = findPath(initialVertex, endVertex, destinationTag);
+            await drawPath(sdk, path);
             console.log('PATH:', path);
 
             if (path && path.length > 0) {
