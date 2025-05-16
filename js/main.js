@@ -1,5 +1,6 @@
 import { distance3D } from './utils.js';
 import { createGraph, getVertexById } from './graph_utils.js';
+import { Tour } from './tour.js';
 
 // Global variables
 const buttonPath1 = document.getElementById('startPath1');
@@ -15,6 +16,11 @@ let mattertags = null;
 
 let currentSweep = null;
 let currentPose = null;
+let currentTour = null;
+
+// Navigation buttons
+let nextButton = null;
+let prevButton = null;
 
 // Map that associates mattertag -> closest sweep
 const endSweepsMap = new Map();
@@ -32,6 +38,11 @@ window.initializeApp = async () => {
         modelData = await sdk.Model.getData();
         mattertags = await sdk.Mattertag.getData();
         console.log('Mattertags retrieved:', mattertags);
+
+        nextButton = document.getElementById('nextButton');
+        prevButton = document.getElementById('prevButton');
+
+        createMattertagsButtons();
 
         // Create graph
         // sweepGraph = await sdk.Sweep.createDirectedGraph();
@@ -124,6 +135,33 @@ window.initializeApp = async () => {
     }
 };
 
+// Create mattertags tour buttons
+function createMattertagsButtons() {
+    const buttonsContainer = document.getElementById('buttons-container');
+    buttonsContainer.innerHTML = ''; // Pulisce i bottoni esistenti
+
+    mattertags.forEach((tag, index) => {
+        const button = document.createElement('button');
+        button.textContent = `Vai a ${tag.label || `Tappa ${index + 1}`}`;
+        button.addEventListener('click', () => {
+            const destinationTag = tag;
+            const initialVertex = getVertexById(sweepGraph, currentSweep.sid);
+            const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
+
+            sdk.Sweep.moveTo(initialVertex.id, {
+                transition: sdk.Sweep.Transition.FLY,
+                transitionTime: 2000,
+            });
+
+            const path = findPath(initialVertex, endVertex, destinationTag);
+            console.log('PATH:', path);
+
+            currentTour = createTour(path, destinationTag);
+        });
+        buttonsContainer.appendChild(button);
+    });
+}
+
 // Find the closest sweep to a mattertag
 function findClosestSweep(tag) {
     let closestSweep = null;
@@ -163,6 +201,27 @@ function findPath(startVertex, endVertex, tag) {
     }
 }
 
+// Create tour
+function createTour(path, tag) {
+    const tour = new Tour('Tour ' + tag.label, path, tag);
+
+    nextButton.hidden = false;
+    prevButton.hidden = false;
+
+    // Aggiungi event listener ai bottoni
+    nextButton.addEventListener('click', () => {
+        tour.next();
+        tour.navigateToCurrent(sdk);
+    });
+
+    prevButton.addEventListener('click', () => {
+        tour.previous();
+        tour.navigateToCurrent(sdk);
+    });
+
+    return tour;
+}
+
 // async function runAutomaticTour(path, tag) {
 //     if (!Array.isArray(path) || path.length === 0) {
 //         console.warn('Percorso vuoto o non valido.');
@@ -199,6 +258,79 @@ function findPath(startVertex, endVertex, tag) {
 
 //     console.log("Tour automatico completato.");
 // }
+
+
+
+
+// function showTourSteps(path, tag) {
+//     // const stepsContainer = document.getElementById('tour-steps-container');
+//     // stepsContainer.innerHTML = ''; // Pulisce la lista precedente
+//     let currentStepIndex = 0;  // Indice del passo corrente
+
+//     // Mostra il primo passo del tour
+//     const currentStep = path[currentStepIndex];
+//     console.log('Current step:', currentStep);
+
+//     // Crea il bottone per il passo successivo
+//     const nextButton = document.createElement('button');
+//     nextButton.className = 'step-button';
+//     nextButton.textContent = 'Avanti';
+
+//     nextButton.addEventListener('click', () => {
+//         if (currentStepIndex < path.length - 1) {
+//             currentStepIndex++;
+//             const nextStep = path[currentStepIndex];
+//             console.log('Next step:', nextStep);
+
+//             // Muove la telecamera al prossimo passo
+//             rotateCameraBetween(currentStep.data.position, nextStep.data.position);
+//             sdk.Sweep.moveTo(nextStep.id, {
+//                 transition: sdk.Sweep.Transition.FLY,
+//                 transitionTime: 1000,
+//             });
+//         } else {
+//             console.log('Hai raggiunto l\'ultimo passo!');
+//             // Puntare al Mattertag finale
+//             rotateCameraBetween(currentStep.data.position, tag.anchorPosition);
+//             sdk.Sweep.moveTo(currentStep.id, {
+//                 transition: sdk.Sweep.Transition.FLY,
+//                 transitionTime: 1000,
+//             });
+//         }
+//     });
+
+//     // Crea il bottone per il passo precedente
+//     const prevButton = document.createElement('button');
+//     prevButton.className = 'step-button';
+//     prevButton.textContent = 'Indietro';
+
+//     prevButton.addEventListener('click', () => {
+//         if (currentStepIndex > 0) {
+//             currentStepIndex--;
+//             const prevStep = path[currentStepIndex];
+//             console.log('Previous step:', prevStep);
+
+//             // Muove la telecamera al passo precedente
+//             rotateCameraBetween(currentStep.data.position, prevStep.data.position);
+//             sdk.Sweep.moveTo(prevStep.id, {
+//                 transition: sdk.Sweep.Transition.FLY,
+//                 transitionTime: 1000,
+//             });
+//         } else {
+//             console.log('Sei già al primo passo!');
+//         }
+//     });
+
+//     // Contenitore per i bottoni di navigazione
+//     const navContainer = document.createElement('div');
+//     navContainer.id = 'nav-buttons-container';
+//     navContainer.appendChild(prevButton);
+//     navContainer.appendChild(nextButton);
+
+//     // Aggiungi il contenitore dei bottoni sopra l'iframe
+//     document.body.appendChild(navContainer);
+// }
+
 
 function showTourSteps(path, tag) {
     const stepsContainer = document.getElementById('tour-steps-container');
