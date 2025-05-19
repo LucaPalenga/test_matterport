@@ -19,6 +19,7 @@ let initialSweep = null;
 let mattertags = null;
 
 let currentSweep = null;
+let currentPose = null;
 let currentTour = null;
 
 // Navigation buttons
