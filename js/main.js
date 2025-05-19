@@ -43,11 +43,8 @@ window.initializeApp = async () => {
 
         sdk = await window.MP_SDK.connect(
             iframe,
-            'ifxi6dn2y34ur0gx8i404m91a',
-            'latest', {
-            sweep: true,
-            scene: true,
-        }
+            'x02q4mq2nsac7euge3234nhec',
+            'latest',
         );
         // sdk = await setupSdk(iframe, 'ifxi6dn2y34ur0gx8i404m91a', '3.5', {
         //     sdkModules: ['scene', 'camera', 'sweep', 'mattertag'], // scene incluso!
