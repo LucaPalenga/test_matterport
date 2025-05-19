@@ -28,6 +28,7 @@ class Tour {
     }
 
     initialize() {
+        this.currentIndex = 0;
         const vertex = this.getCurrentStep();
         const nextVertex = this.steps[this.currentIndex + 1];  // Prossimo sweep (se esiste)
 
@@ -47,6 +48,7 @@ class Tour {
         const vertex = this.getCurrentStep();
         const nextVertex = this.steps[this.currentIndex + 1];  // Prossimo sweep (se esiste)
 
+        console.log('Current index:', this.currentIndex);
         console.log('Current step:', vertex);
         console.log('Next step:', nextVertex);
 
