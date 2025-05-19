@@ -1,12 +1,14 @@
 import { distance3D } from './utils.js';
-import { createGraph, getVertexById, drawPath } from './graph_utils.js';
+import { createGraph, getVertexById } from './graph_utils.js';
 import { Tour } from './tour.js';
-// import CameraManager from './mp_sdk_manager.js';
+// import { setupSdk } from '@matterport/sdk'
+
 
 
 // Global variables
 const buttonPath1 = document.getElementById('startPath1');
 const buttonPath2 = document.getElementById('startPath2');
+const buttonRemovePath = document.getElementById('removePath');
 const iframe = document.getElementById('showcase');
 
 let sdk = null;
@@ -17,7 +19,6 @@ let initialSweep = null;
 let mattertags = null;
 
 let currentSweep = null;
-let currentPose = null;
 let currentTour = null;
 
 // Navigation buttons
@@ -31,15 +32,29 @@ const endSweepsMap = new Map();
 window.initializeApp = async () => {
     buttonPath1.disabled = true;
     buttonPath2.disabled = true;
+    buttonRemovePath.disabled = true;
 
     // taac key x02q4mq2nsac7euge3234nhec
     // dotbeyond key ifxi6dn2y34ur0gx8i404m91a
 
     try {
         console.log('Connecting SDK...');
-        sdk = await window.MP_SDK.connect(iframe, 'ifxi6dn2y34ur0gx8i404m91a', '3.5');
+
+        sdk = await window.MP_SDK.connect(
+            iframe,
+            'ifxi6dn2y34ur0gx8i404m91a',
+            'latest', {
+            sweep: true,
+            scene: true,
+        }
+        );
+        // sdk = await setupSdk(iframe, 'ifxi6dn2y34ur0gx8i404m91a', '3.5', {
+        //     sdkModules: ['scene', 'camera', 'sweep', 'mattertag'], // scene incluso!
+        // });
         console.log('SDK connected');
         // window.cameraManager = new CameraManager(sdk);
+
+        console.log('Scene module:', sdk.Scene); // Deve stampare un oggetto, NON undefined
 
         modelData = await sdk.Model.getData();
         mattertags = await sdk.Mattertag.getData();
@@ -93,10 +108,17 @@ window.initializeApp = async () => {
 
         buttonPath1.addEventListener('click', function () {
             startPCRoomNavigation();
+            buttonRemovePath.disabled = false;
         });
 
         buttonPath2.addEventListener('click', async function () {
             await startReceptionNavigation();
+            buttonRemovePath.disabled = false;
+        });
+
+        buttonRemovePath.addEventListener('click', function () {
+            resetNavigation();
+            buttonRemovePath.disabled = true;
         });
 
         /////////////////////////////////////////////////////////////////////
@@ -206,194 +228,8 @@ function createTour(path, tag) {
 
     console.log('Tour created:', tour);
 
-
-
     return tour;
 }
-
-
-// async function runAutomaticTour(path, tag) {
-//     if (!Array.isArray(path) || path.length === 0) {
-//         console.warn('Percorso vuoto o non valido.');
-//         return;
-//     }
-
-//     if (!tag || !tag.anchorPosition) {
-//         console.error('Tag non valido o senza anchorPosition');
-//         return;
-//     }
-
-//     for (let i = 0; i < path.length; i++) {
-//         const vertex = path[i];
-//         const nextVertex = path[i + 1];
-
-//         const currentPos = vertex.data.position;
-
-//         if (nextVertex) {
-//             const nextPos = nextVertex.data.position;
-//             console.log(`Step ${i + 1}: ruoto verso prossimo sweep`);
-//             rotateCameraBetween(currentPos, nextPos);
-//         } else {
-//             console.log(`Ultimo step: ruoto verso Mattertag`);
-//             rotateCameraBetween(currentPos, tag.anchorPosition);
-//         }
-
-//         sdk.Sweep.moveTo(vertex.id, {
-//             transition: sdk.Sweep.Transition.FLY,
-//             transitionTime: 1000,
-//         });
-
-//         await delay(2000); // Attendi per la transizione
-//     }
-
-//     console.log("Tour automatico completato.");
-// }
-
-
-
-
-// function showTourSteps(path, tag) {
-//     // const stepsContainer = document.getElementById('tour-steps-container');
-//     // stepsContainer.innerHTML = ''; // Pulisce la lista precedente
-//     let currentStepIndex = 0;  // Indice del passo corrente
-
-//     // Mostra il primo passo del tour
-//     const currentStep = path[currentStepIndex];
-//     console.log('Current step:', currentStep);
-
-//     // Crea il bottone per il passo successivo
-//     const nextButton = document.createElement('button');
-//     nextButton.className = 'step-button';
-//     nextButton.textContent = 'Avanti';
-
-//     nextButton.addEventListener('click', () => {
-//         if (currentStepIndex < path.length - 1) {
-//             currentStepIndex++;
-//             const nextStep = path[currentStepIndex];
-//             console.log('Next step:', nextStep);
-
-//             // Muove la telecamera al prossimo passo
-//             rotateCameraBetween(currentStep.data.position, nextStep.data.position);
-//             sdk.Sweep.moveTo(nextStep.id, {
-//                 transition: sdk.Sweep.Transition.FLY,
-//                 transitionTime: 1000,
-//             });
-//         } else {
-//             console.log('Hai raggiunto l\'ultimo passo!');
-//             // Puntare al Mattertag finale
-//             rotateCameraBetween(currentStep.data.position, tag.anchorPosition);
-//             sdk.Sweep.moveTo(currentStep.id, {
-//                 transition: sdk.Sweep.Transition.FLY,
-//                 transitionTime: 1000,
-//             });
-//         }
-//     });
-
-//     // Crea il bottone per il passo precedente
-//     const prevButton = document.createElement('button');
-//     prevButton.className = 'step-button';
-//     prevButton.textContent = 'Indietro';
-
-//     prevButton.addEventListener('click', () => {
-//         if (currentStepIndex > 0) {
-//             currentStepIndex--;
-//             const prevStep = path[currentStepIndex];
-//             console.log('Previous step:', prevStep);
-
-//             // Muove la telecamera al passo precedente
-//             rotateCameraBetween(currentStep.data.position, prevStep.data.position);
-//             sdk.Sweep.moveTo(prevStep.id, {
-//                 transition: sdk.Sweep.Transition.FLY,
-//                 transitionTime: 1000,
-//             });
-//         } else {
-//             console.log('Sei già al primo passo!');
-//         }
-//     });
-
-//     // Contenitore per i bottoni di navigazione
-//     const navContainer = document.createElement('div');
-//     navContainer.id = 'nav-buttons-container';
-//     navContainer.appendChild(prevButton);
-//     navContainer.appendChild(nextButton);
-
-//     // Aggiungi il contenitore dei bottoni sopra l'iframe
-//     document.body.appendChild(navContainer);
-// }
-
-
-// function showTourSteps(path, tag) {
-//     const stepsContainer = document.getElementById('tour-steps-container');
-//     stepsContainer.innerHTML = ''; // Pulisce la lista precedente
-
-//     path.forEach((vertex, index) => {
-//         const stepButton = document.createElement('button');
-//         stepButton.className = 'step-button';
-//         stepButton.textContent = `Tappa ${index + 1}`;
-
-//         stepButton.addEventListener('click', () => {
-//             const nextVertex = path[index + 1];  // Prossimo sweep (se esiste)
-
-//             console.log('Current step:', vertex);
-
-//             if (!nextVertex) {
-//                 console.log('Next step: nessun prossimo step (ultimo)');
-
-//                 // PUNTA al mattertag invece che al prossimo vertex
-//                 rotateCameraBetween(vertex.data.position, tag.anchorPosition);
-
-//                 sdk.Sweep.moveTo(vertex.id, {
-//                     transition: sdk.Sweep.Transition.FLY,
-//                     transitionTime: 1000,
-//                 });
-
-//                 return;
-//             }
-
-//             if (vertex.id === nextVertex.id) {
-//                 console.log('Sweep già occupato');
-//                 // sdk.Camera.rotate(0, 0, { speed: 200 });
-//                 return;
-//             }
-
-//             console.log('Current rotation: ', currentPose.rotation);
-//             rotateCameraBetween(vertex.data.position, nextVertex.data.position);
-
-//             sdk.Sweep.moveTo(vertex.id, {
-//                 transition: sdk.Sweep.Transition.FLY,
-//                 transitionTime: 1000,
-//             });
-
-//             console.log(`Spostato a sweep ${vertex.id}`);
-//         });
-
-//         stepsContainer.appendChild(stepButton);
-//     });
-// }
-
-// function rotateCameraBetween(fromPos, toPos) {
-//     if (!fromPos || !toPos) {
-//         console.warn('Posizioni non valide per la rotazione');
-//         return;
-//     }
-
-//     const dx = toPos.x - fromPos.x;
-//     const dy = toPos.y - fromPos.y;
-//     const dz = toPos.z - fromPos.z;
-
-//     // Yaw (asse Y) + 180° per correggere direzione
-//     let yaw = Math.atan2(dx, dz) * (180 / Math.PI) + 180;
-//     yaw = ((yaw + 180) % 360) - 180;  // Normalizzazione tra -180 e 180
-
-//     // Pitch (asse X)
-//     const distanceXZ = Math.sqrt(dx * dx + dz * dz);
-//     const pitch = Math.atan2(dy, distanceXZ) * (180 / Math.PI);
-
-//     console.log('→ Camera Rotation: pitch:', pitch.toFixed(2), 'yaw:', yaw.toFixed(2));
-
-//     sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: 200 });
-// }
-
 
 
 // startReceptionNavigation(): si aspetta che il Matterport carichi il percorso dal tavolino bianco della stanza 
@@ -419,7 +255,6 @@ async function startReceptionNavigation() {
         console.log('PATH:', path);
         currentTour = createTour(path, destinationTag);
         currentTour.initialize();
-        drawPath(sdk, path);
 
         nextButton.hidden = false;
         prevButton.hidden = false;
@@ -447,7 +282,6 @@ function startPCRoomNavigation() {
         console.log('PATH:', path);
         currentTour = createTour(path, destinationTag);
         currentTour.initialize();
-        drawPath(sdk, path);
 
         nextButton.hidden = false;
         prevButton.hidden = false;

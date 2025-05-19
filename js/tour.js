@@ -1,18 +1,22 @@
 class Tour {
-    constructor(sdk, name, steps, finalTag) {
+    constructor(sdk, name, path, finalTag) {
         this.sdk = sdk;
-        this.name = name;             // nome del tour
-        this.steps = steps;           // array di vertex
-        this.finalTag = finalTag;     // mattertag finale
-        this.currentIndex = 0;        // indice attuale
+        this.name = name;
+        this.path = path;
+        this.finalTag = finalTag;
+        this.currentIndex = 0;
     }
 
+    // Sensor data
+    sensor = null;
+    sources = [];
+
     getCurrentStep() {
-        return this.steps[this.currentIndex];
+        return this.path[this.currentIndex];
     }
 
     hasNext() {
-        return this.currentIndex < this.steps.length - 1;
+        return this.currentIndex < this.path.length - 1;
     }
 
     hasPrevious() {
@@ -30,10 +34,12 @@ class Tour {
     initialize() {
         this.currentIndex = 0;
         const vertex = this.getCurrentStep();
-        const nextVertex = this.steps[this.currentIndex + 1];  // Prossimo sweep (se esiste)
+        const nextVertex = this.path[this.currentIndex + 1];
 
         console.log('Current step:', vertex);
         console.log('Next step:', nextVertex);
+
+        this.drawPath();
 
         // Move to initial sweep
         this.sdk.Sweep.moveTo(vertex.id, {
@@ -46,7 +52,7 @@ class Tour {
 
     goToNext() {
         const vertex = this.getCurrentStep();
-        const nextVertex = this.steps[this.currentIndex + 1];  // Prossimo sweep (se esiste)
+        const nextVertex = this.path[this.currentIndex + 1];  // Prossimo sweep (se esiste)
 
         console.log('Current index:', this.currentIndex);
         console.log('Current step:', vertex);
@@ -79,7 +85,7 @@ class Tour {
 
     goToPrevious() {
         const vertex = this.getCurrentStep();
-        const nextVertex = this.steps[this.currentIndex - 1];  // Prossimo sweep (se esiste)
+        const nextVertex = this.path[this.currentIndex - 1];  // Prossimo sweep (se esiste)
 
         console.log('Current step:', vertex);
         console.log('Previous step:', nextVertex);
@@ -140,15 +146,16 @@ class Tour {
     }
 
     isLastStep() {
-        return this.currentIndex === this.steps.length - 1;
+        return this.currentIndex === this.path.length - 1;
     }
 
     isFirstStep() {
         return this.currentIndex === 0;
     }
 
-    reset() {
+    async reset() {
         this.currentIndex = 0;
+        this.sensor.showDebug(false)
     }
 
     // Naviga visivamente con Matterport SDK
@@ -166,6 +173,58 @@ class Tour {
         sdk.Camera.setRotation({ x: 0, y: 0 }, { speed: 200 });
         sdk.Mattertag.navigateToTag(this.finalTag.sid);
     }
+
+
+    /**
+     * Draws a path using the Matterport SDK by creating a camera sensor
+     * and subscribing to its readings.
+     * This function iterates over a given path, creating a sensor source
+     * for each vertex and adding it to the sensor.
+     * @param {Object} sdk - The Matterport SDK instance.
+     * @param {Array} path - An array of vertices representing the path to draw,
+     * where each vertex contains an id and data with x, y, z coordinates.
+     */
+    async drawPath() {
+        this.sensor = await this.sdk.Sensor.createSensor(this.sdk.Sensor.SensorType.CAMERA)
+        this.sensor.showDebug(true)
+        this.sensor.readings.subscribe({
+            onUpdated(source, reading) {
+                if (reading.inRange) {
+                    console.log(source.userData.id, "is currently in range")
+                    /*
+                    if (reading.inView) {
+                      console.log("... and currently visible on screen")
+                    }
+                    */
+                }
+            },
+        })
+        for (let i = 0; i < this.path.length; i++) {
+            var position = {
+                x: this.path[i].data.position.x,
+                y: this.path[i].data.position.y - 0.5,
+                z: this.path[i].data.position.z,
+            }
+
+            const source = await this.sdk.Sensor.createSource(
+                this.sdk.Sensor.SourceType.SPHERE,
+                {
+                    origin: position,
+                    radius: 0.1,
+                    userData: {
+                        id: this.path[i].id,
+                    },
+                },
+            )
+
+            this.sources.push(source);
+            this.sensor.addSource(source)
+        }
+
+        console.log('Sensor created ' + this.sensor);
+    }
+
 }
+
 
 export { Tour };

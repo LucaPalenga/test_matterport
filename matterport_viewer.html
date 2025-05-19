@@ -78,12 +78,34 @@
             flex-direction: column;
             gap: 10px;
         }
+
+        #removePath {
+            position: absolute;
+            height: 30px;
+            right: 10px;
+            top: 150px;
+            /* Posizionato sotto gli altri due */
+            padding: 10px;
+            font-size: 16px;
+            background-color: rgba(240, 19, 19, 0.96);
+            color: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+            transition: background-color 0.2s;
+        }
+
+        #removePath:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
     </style>
 </head>
 
 <body>
     <button id="startPath1" type="button">Inizia percorso per Scaffale</button>
     <button id="startPath2" type="button">Inizia percorso per Sala</button>
+    <button id="removePath" type="button">Rimuovi percorso</button>
     <div id="buttons-container"></div>
 
     <div id="nav-buttons-container">
@@ -95,8 +117,9 @@
     <!-- RAV ZQ7sYhu3mQE -->
     <!-- Piangipane 2FESsSn5irZS -->
     <!-- Piangipane modificato s1NFdaHWTHz -->
-    <iframe id="showcase" src="https://my.matterport.com/show/?m=s1NFdaHWTHz&play=1" allowfullscreen
-        allow="xr-spatial-tracking; accelerometer; gyroscope"></iframe>
+    <iframe id="showcase"
+        src="https://my.matterport.com/show/?m=s1NFdaHWTHz&play=1&applicationKey=ifxi6dn2y34ur0gx8i404m91a"
+        allowfullscreen allow="xr-spatial-tracking; accelerometer; gyroscope"></iframe>
 
     <!-- <script src="bundle/sdk.d.ts"></script> -->
     <script type="text/javascript" src="https://static.matterport.com/showcase-sdk/latest.js"></script>
