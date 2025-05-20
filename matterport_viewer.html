@@ -135,17 +135,30 @@
         // Ascolta i messaggi provenienti da Flutter o da altre parti
         window.addEventListener('message', function (event) {
             // Durante la navigazione disabilita i bottoni
-            if (event.data === 'navigatingToPreviousStep' || event.data === 'navigatingToNextStep') {
+            if (event.data.type === 'navigatingToPreviousStep' || event.data.type === 'navigatingToNextStep') {
                 // Disabilita i bottoni
                 if (nextButton) nextButton.disabled = true;
                 if (prevButton) prevButton.disabled = true;
             }
 
             // Durante la navigazione abilito i bottoni  
-            if (event.data === 'arrivedToPreviousStep' || event.data === 'arrivedToNextStep') {
+            if (event.data.type === 'arrivedToPreviousStep' || event.data.type === 'arrivedToNextStep') {
                 // Riabilita i bottoni
                 if (nextButton) nextButton.disabled = false;
                 if (prevButton) prevButton.disabled = false;
+            }
+
+            // Durante la navigazione abilito i bottoni  
+            if (event.data.type === 'stepsRetrieved') {
+
+                console.log('******** LISTENER stepsRetrieved ********');
+
+                // Stampa il numero di step
+                if (event.data.data) {
+                    console.log('Numero di step nel tour:', event.data.data);
+                } else {
+                    console.warn('Nessun tour attivo o percorso non trovato.');
+                }
             }
         });
 

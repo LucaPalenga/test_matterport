@@ -302,13 +302,19 @@ function findClosestSweep(tag) {
 
 
 // Find the shortest path between two sweeps
-function findPath(startVertex, endVertex, tag) {
+function findPath(startVertex, endVertex) {
     if (!startVertex || !endVertex) {
         console.warn('Start o end vertex non trovati nel grafo:', startVertex.id, endVertex.id);
         return null;
     }
 
     const runner = sdk.Graph.createAStarRunner(sweepGraph, startVertex, endVertex).exec();
+
+    // window.jslog.postMessage('stepsRetrieved');
+    window.postMessage({
+        type: 'stepsRetrieved',
+        data: runner.path?.length || 0
+    }, '*');
 
     if (runner.path && runner.path.length > 0) {
         const pathIds = runner.path.map(v => v.id);
@@ -320,6 +326,8 @@ function findPath(startVertex, endVertex, tag) {
         iframe.focus();
         return null;
     }
+
+
 }
 
 /**
@@ -411,7 +419,7 @@ class Tour {
         this.rotateCameraBetween(currentVertex.data.position, nextVertex.data.position);
 
         // window.jslog.postMessage('navigatingToNextStep');
-        window.postMessage('navigatingToNextStep', '*');
+        window.postMessage({ type: 'navigatingToNextStep' }, '*');
 
         await this.sdk.Sweep.moveTo(nextVertex.id, {
             transition: this.sdk.Sweep.Transition.FLY,
@@ -419,7 +427,7 @@ class Tour {
         });
 
         // window.jslog.postMessage('arrivedToNextStep');
-        window.postMessage('arrivedToNextStep', '*');
+        window.postMessage({ type: 'arrivedToNextStep' }, '*');
 
 
         if (nextNextVertex) {
@@ -451,7 +459,7 @@ class Tour {
         this.rotateCameraBetween(currentVertex.data.position, previousVertex.data.position);
 
         // window.jslog.postMessage('navigatingToPreviousStep');
-        window.postMessage('navigatingToPreviousStep', '*');
+        window.postMessage({ type: 'navigatingToPreviousStep' }, '*');
 
 
         await this.sdk.Sweep.moveTo(previousVertex.id, {
@@ -460,7 +468,7 @@ class Tour {
         });
 
         // window.jslog.postMessage('arrivedToPreviousStep');
-        window.postMessage('arrivedToPreviousStep', '*');
+        window.postMessage({ type: 'arrivedToPreviousStep' }, '*');
 
         if (previousPreviousVertex) {
             this.rotateCameraBetween(previousVertex.data.position, previousPreviousVertex.data.position);
@@ -567,7 +575,7 @@ async function startReceptionNavigation() {
     console.log('END SWEEP:', endVertex.id);
     console.log('TAG:', destinationTag.label);
 
-    const path = findPath(initialVertex, endVertex, destinationTag);
+    const path = findPath(initialVertex, endVertex);
     if (path != null && path.length > 0) {
         console.log('PATH:', path);
         currentTour = createTour(path, destinationTag);
@@ -578,6 +586,7 @@ async function startReceptionNavigation() {
     else {
         console.log('Nessun percorso trovato');
     }
+
 }
 
 
@@ -597,7 +606,7 @@ async function startPCRoomNavigation() {
     console.log('END SWEEP:', endVertex.id);
     console.log('TAG:', destinationTag.label);
 
-    const path = findPath(initialVertex, endVertex, destinationTag);
+    const path = findPath(initialVertex, endVertex);
     if (path != null && path.length > 0) {
         console.log('PATH:', path);
         currentTour = createTour(path, destinationTag);
@@ -608,6 +617,7 @@ async function startPCRoomNavigation() {
     else {
         console.log('Nessun percorso trovato');
     }
+
 }
 
 
