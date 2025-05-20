@@ -1,17 +1,3 @@
-/**
- * Calculate the Euclidean distance between two 3D points
- * @param {Object} p1 - First point with x, y, z coordinates
- * @param {Object} p2 - Second point with x, y, z coordinates
- * @returns {number} Distance between the points
- */
-function distance3D(p1, p2) {
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const dz = p2.z - p1.z;
-
-    return Math.sqrt(dx * dx + dy * dy + dz * dz);
-}
-
 // Global variables
 let buttonPath1;
 let buttonPath2;
@@ -32,260 +18,107 @@ let currentTour = null;
 let nextButton = null;
 let prevButton = null;
 
-// Map that associates mattertag -> closest sweep
-const endSweepsMap = new Map();
 
 
-class Tour {
-    constructor(sdk, name, path, finalTag) {
-        this.sdk = sdk;
-        this.name = name;
-        this.path = path;
-        this.finalTag = finalTag;
-        this.currentIndex = 0;
-    }
+// Initialize the application when the iframe loads
+function initializeApp() {
+    buttonPath1 = document.getElementById('startPath1');
+    buttonPath2 = document.getElementById('startPath2');
+    iframe = document.getElementById('showcase');
+    nextButton = document.getElementById('nextButton');
+    prevButton = document.getElementById('prevButton');
+    buttonRemovePath = document.getElementById('removePath');
 
-    // Sensor data
-    sensor = null;
-    sources = [];
+    buttonPath1.disabled = true;
+    buttonPath2.disabled = true;
 
-    getCurrentStep() {
-        return this.path[this.currentIndex];
-    }
+    try {
+        console.log('Connecting SDK...');
+        window.MP_SDK.connect(iframe, 'x02q4mq2nsac7euge3234nhec', 'latest')
+            .then(function (mpSdk) {
+                sdk = mpSdk;
+                console.log('SDK connected');
 
-    hasNext() {
-        return this.currentIndex < this.path.length - 1;
-    }
+                return sdk.Model.getData();
+            })
+            .then(function (data) {
+                modelData = data;
+                return sdk.Mattertag.getData();
+            })
+            .then(function (tags) {
+                mattertags = tags;
+                console.log('Mattertags retrieved:', mattertags);
+                return createCustomGraph(sdk);
+            })
+            .then(function (graph) {
+                sweepGraph = graph;
+                console.log('Sweep graph created:', sweepGraph);
 
-    hasPrevious() {
-        return this.currentIndex >= 0;
-    }
+                sdk.Camera.pose.subscribe(function (pose) {
+                    currentPose = pose;
+                });
 
-    next() {
-        if (this.hasNext()) {
-            this.currentIndex++;
-            return this.getCurrentStep();
-        }
-        return null;
-    }
+                sdk.Sweep.current.subscribe(function (sweep) {
+                    if (sweep.sid === '') {
+                        // Not at a sweep position
+                    } else {
+                        if (!initialSweep) {
+                            initialSweep = sweep;
+                        }
 
-    initialize() {
-        this.currentIndex = 0;
-        const vertex = this.getCurrentStep();
-        const nextVertex = this.path[this.currentIndex + 1];
+                        currentSweep = sweep;
+                        console.log('Current sweep:', sweep);
 
-        console.log('Current step:', vertex);
-        console.log('Next step:', nextVertex);
-
-        this.drawPath();
-
-        // Move to initial sweep
-        this.sdk.Sweep.moveTo(vertex.id, {
-            transition: this.sdk.Sweep.Transition.INSTANT,
-            transitionTime: 2000,
-        });
-
-        this.rotateCameraBetween(vertex.data.position, nextVertex.data.position);
-    }
-
-    async goToNext() {
-        const currentVertex = this.getCurrentStep();
-        const nextVertex = this.path[this.currentIndex + 1];  // Prossimo sweep (se esiste)
-        const nextNextVertex = this.path[this.currentIndex + 2];  // Prossimo sweep (se esiste)
-
-        // Se non c'è prossimo sweep, esce
-        if (!nextVertex) {
-            console.log('Next step: nessun prossimo step (ultimo)');
-            return;
-        }
-
-        if (currentVertex.id === nextVertex.id) {
-            console.log('Sweep già occupato');
-            return;
-        }
-
-        this.rotateCameraBetween(currentVertex.data.position, nextVertex.data.position);
-
-        window.jslog.postMessage('navigatingToNextStep');
-        window.postMessage('navigatingToNextStep', '*');
-
-        await this.sdk.Sweep.moveTo(nextVertex.id, {
-            transition: this.sdk.Sweep.Transition.FLY,
-            transitionTime: 1000,
-        });
-
-        window.jslog.postMessage('arrivedToNextStep');
-        window.postMessage('arrivedToNextStep', '*');
-
-
-        if (nextNextVertex) {
-            this.rotateCameraBetween(nextVertex.data.position, nextNextVertex.data.position);
-        } else {
-            this.rotateCameraBetween(nextVertex.data.position, this.finalTag.anchorPosition);
-        }
-
-        console.log(`Spostato a sweep ${nextVertex.id}`);
-        this.currentIndex++;
-    }
-
-    async goToPrevious() {
-        const currentVertex = this.getCurrentStep();
-        const previousVertex = this.path[this.currentIndex - 1];  // Prossimo sweep (se esiste)
-        const previousPreviousVertex = this.path[this.currentIndex - 2];  // Prossimo sweep (se esiste)
-
-        // Se non c'è prossimo sweep, esce
-        if (!previousVertex) {
-            console.log('Previous step: nessun prossimo step (ultimo)');
-            return;
-        }
-
-        if (currentVertex.id === previousVertex.id) {
-            console.log('Sweep già occupato');
-            return;
-        }
-
-        this.rotateCameraBetween(currentVertex.data.position, previousVertex.data.position);
-
-        window.jslog.postMessage('navigatingToPreviousStep');
-        window.postMessage('navigatingToPreviousStep', '*');
-
-
-        await this.sdk.Sweep.moveTo(previousVertex.id, {
-            transition: this.sdk.Sweep.Transition.FLY,
-            transitionTime: 1000,
-        });
-
-        window.jslog.postMessage('arrivedToPreviousStep');
-        window.postMessage('arrivedToPreviousStep', '*');
-
-        if (previousPreviousVertex) {
-            this.rotateCameraBetween(previousVertex.data.position, previousPreviousVertex.data.position);
-        } else {
-            this.rotateCameraBetween(previousVertex.data.position, currentVertex.data.position);
-        }
-
-        console.log(`Spostato a sweep ${previousVertex.id}`);
-        this.currentIndex--;
-    }
-
-    rotateCameraBetween(fromPos, toPos) {
-        if (!fromPos || !toPos) {
-            console.warn('Posizioni non valide per la rotazione');
-            return;
-        }
-
-        const dx = toPos.x - fromPos.x;
-        const dy = toPos.y - fromPos.y;
-        const dz = toPos.z - fromPos.z;
-
-        // Yaw (asse Y) + 180° per correggere direzione
-        let yaw = Math.atan2(dx, dz) * (180 / Math.PI) + 180;
-        yaw = ((yaw + 180) % 360) - 180;  // Normalizzazione tra -180 e 180
-
-        // Pitch (asse X)
-        const distanceXZ = Math.sqrt(dx * dx + dz * dz);
-        const pitch = Math.atan2(dy, distanceXZ) * (180 / Math.PI);
-
-        console.log('? Camera Rotation: pitch:', pitch.toFixed(2), 'yaw:', yaw.toFixed(2));
-
-        this.sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: 200 });
-    }
-
-
-    previous() {
-        if (this.hasPrevious()) {
-            this.currentIndex--;
-            return this.getCurrentStep();
-        }
-        return null;
-    }
-
-    isLastStep() {
-        return this.currentIndex === this.path.length - 1;
-    }
-
-    isFirstStep() {
-        return this.currentIndex === 0;
-    }
-
-    async reset() {
-        this.currentIndex = 0;
-        this.sensor.showDebug(false)
-    }
-
-    // Naviga visivamente con Matterport SDK
-    navigateToCurrent(sdk) {
-        const currentVertex = this.getCurrentStep();
-
-
-        sdk.Sweep.moveTo(currentVertex.id, {
-            transition: sdk.Sweep.Transition.FLY,
-            transitionTime: 1000
-        });
-    }
-
-    navigateToFinalTag(sdk) {
-        sdk.Camera.setRotation({ x: 0, y: 0 }, { speed: 200 });
-        sdk.Mattertag.navigateToTag(this.finalTag.sid);
-    }
-
-
-    /**
-     * Draws a path using the Matterport SDK by creating a camera sensor
-     * and subscribing to its readings.
-     * This function iterates over a given path, creating a sensor source
-     * for each vertex and adding it to the sensor.
-     * @param {Object} sdk - The Matterport SDK instance.
-     * @param {Array} path - An array of vertices representing the path to draw,
-     * where each vertex contains an id and data with x, y, z coordinates.
-     */
-    async drawPath() {
-        this.sensor = await this.sdk.Sensor.createSensor(this.sdk.Sensor.SensorType.CAMERA)
-        this.sensor.showDebug(true)
-        this.sensor.readings.subscribe({
-            onUpdated(source, reading) {
-                if (reading.inRange) {
-                    console.log(source.userData.id, "is currently in range")
-                    /*
-                    if (reading.inView) {
-                      console.log("... and currently visible on screen")
+                        buttonPath1.disabled = false;
+                        buttonPath2.disabled = false;
                     }
-                    */
-                }
-            },
-        })
-        for (let i = 0; i < this.path.length; i++) {
-            var position = {
-                x: this.path[i].data.position.x,
-                y: this.path[i].data.position.y - 1.0,
-                z: this.path[i].data.position.z,
-            }
+                });
 
-            const source = await this.sdk.Sensor.createSource(
-                this.sdk.Sensor.SourceType.SPHERE,
-                {
-                    origin: position,
-                    radius: 0.1,
-                    userData: {
-                        id: this.path[i].id,
-                    },
-                },
-            )
+                // Path buttons listeners
+                buttonPath1.addEventListener('click', function () {
+                    startReceptionNavigation();
+                });
 
-            this.sources.push(source);
-            this.sensor.addSource(source)
-        }
+                buttonPath2.addEventListener('click', function () {
+                    startPCRoomNavigation();
+                });
 
-        console.log('Sensor created ' + this.sensor);
+                // Navigation buttons
+                nextButton.addEventListener('click', async function () {
+                    await navigateToNextStep();
+                });
+
+                prevButton.addEventListener('click', async function () {
+                    await navigateToPreviousStep();
+                });
+
+                buttonRemovePath.addEventListener('click', function () {
+                    resetNavigation();
+                });
+            });
+    } catch (e) {
+        console.error('Error connecting SDK:', e);
     }
+}
 
+// Create tour
+function createTour(path, tag) {
+    const tour = new Tour(
+        sdk,
+        'Tour ' + tag.label,
+        path,
+        tag,
+    );
+
+    console.log('Tour created:', tour);
+
+    return tour;
 }
 
 
+//////////////////////////////////////////////////////////////////////
 // Graph utilities
-function createGraph(sdk) {
-    return sdk.Sweep.createGraph();
-}
+//////////////////////////////////////////////////////////////////////
 
 function createCustomGraph(sdk) {
     console.log("Creating custom graph");
@@ -489,96 +322,235 @@ function findPath(startVertex, endVertex, tag) {
     }
 }
 
-// Create tour
-function createTour(path, tag) {
-    const tour = new Tour(
-        sdk,
-        'Tour ' + tag.label,
-        path,
-        tag,
-    );
+/**
+ * Calculate the Euclidean distance between two 3D points
+ * @param {Object} p1 - First point with x, y, z coordinates
+ * @param {Object} p2 - Second point with x, y, z coordinates
+ * @returns {number} Distance between the points
+ */
+function distance3D(p1, p2) {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const dz = p2.z - p1.z;
 
-    console.log('Tour created:', tour);
-
-    return tour;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+//////////////////////////////////////////////////////////////////////
+// Tour class
+//////////////////////////////////////////////////////////////////////
 
-// Initialize the application when the iframe loads
-function initializeApp() {
-    buttonPath1 = document.getElementById('startPath1');
-    buttonPath2 = document.getElementById('startPath2');
-    iframe = document.getElementById('showcase');
-    nextButton = document.getElementById('nextButton');
-    prevButton = document.getElementById('prevButton');
-
-    buttonPath1.disabled = true;
-    buttonPath2.disabled = true;
-
-    try {
-        console.log('Connecting SDK...');
-        window.MP_SDK.connect(iframe, 'x02q4mq2nsac7euge3234nhec', 'latest')
-            .then(function (mpSdk) {
-                sdk = mpSdk;
-                console.log('SDK connected');
-
-                return sdk.Model.getData();
-            })
-            .then(function (data) {
-                modelData = data;
-                return sdk.Mattertag.getData();
-            })
-            .then(function (tags) {
-                mattertags = tags;
-                console.log('Mattertags retrieved:', mattertags);
-                return createCustomGraph(sdk);
-            })
-            .then(function (graph) {
-                sweepGraph = graph;
-                console.log('Sweep graph created:', sweepGraph);
-
-                sdk.Camera.pose.subscribe(function (pose) {
-                    currentPose = pose;
-                });
-
-                sdk.Sweep.current.subscribe(function (sweep) {
-                    if (sweep.sid === '') {
-                        // Not at a sweep position
-                    } else {
-                        if (!initialSweep) {
-                            initialSweep = sweep;
-                        }
-
-                        currentSweep = sweep;
-                        console.log('Current sweep:', sweep);
-
-                        buttonPath1.disabled = false;
-                        buttonPath2.disabled = false;
-                    }
-                });
-
-                // Path buttons listeners
-                buttonPath1.addEventListener('click', function () {
-                    startReceptionNavigation();
-                });
-
-                buttonPath2.addEventListener('click', function () {
-                    startPCRoomNavigation();
-                });
-
-                // Navigation buttons
-                nextButton.addEventListener('click', async function () {
-                    await navigateToNextStep();
-                });
-
-                prevButton.addEventListener('click', async function () {
-                    await navigateToPreviousStep();
-                });
-            });
-    } catch (e) {
-        console.error('Error connecting SDK:', e);
+class Tour {
+    constructor(sdk, name, path, finalTag) {
+        this.sdk = sdk;
+        this.name = name;
+        this.path = path;
+        this.finalTag = finalTag;
+        this.currentIndex = 0;
     }
+
+    // Sensor data
+    sensor = null;
+    sources = [];
+
+    getCurrentStep() {
+        return this.path[this.currentIndex];
+    }
+
+    hasNext() {
+        return this.currentIndex < this.path.length - 1;
+    }
+
+    hasPrevious() {
+        return this.currentIndex >= 0;
+    }
+
+    next() {
+        if (this.hasNext()) {
+            this.currentIndex++;
+            return this.getCurrentStep();
+        }
+        return null;
+    }
+
+    initialize() {
+        this.currentIndex = 0;
+        const vertex = this.getCurrentStep();
+        const nextVertex = this.path[this.currentIndex + 1];
+
+        console.log('Current step:', vertex);
+        console.log('Next step:', nextVertex);
+
+        this.drawPath();
+
+        // Move to initial sweep
+        this.sdk.Sweep.moveTo(vertex.id, {
+            transition: this.sdk.Sweep.Transition.INSTANT,
+            transitionTime: 2000,
+        });
+
+        this.rotateCameraBetween(vertex.data.position, nextVertex.data.position);
+    }
+
+    async goToNext() {
+        const currentVertex = this.getCurrentStep();
+        const nextVertex = this.path[this.currentIndex + 1];  // Prossimo sweep (se esiste)
+        const nextNextVertex = this.path[this.currentIndex + 2];  // Prossimo sweep (se esiste)
+
+        // Se non c'è prossimo sweep, esce
+        if (!nextVertex) {
+            console.log('Next step: nessun prossimo step (ultimo)');
+            return;
+        }
+
+        if (currentVertex.id === nextVertex.id) {
+            console.log('Sweep già occupato');
+            return;
+        }
+
+        this.rotateCameraBetween(currentVertex.data.position, nextVertex.data.position);
+
+        // window.jslog.postMessage('navigatingToNextStep');
+        window.postMessage('navigatingToNextStep', '*');
+
+        await this.sdk.Sweep.moveTo(nextVertex.id, {
+            transition: this.sdk.Sweep.Transition.FLY,
+            transitionTime: 1000,
+        });
+
+        // window.jslog.postMessage('arrivedToNextStep');
+        window.postMessage('arrivedToNextStep', '*');
+
+
+        if (nextNextVertex) {
+            this.rotateCameraBetween(nextVertex.data.position, nextNextVertex.data.position);
+        } else {
+            this.rotateCameraBetween(nextVertex.data.position, this.finalTag.anchorPosition);
+        }
+
+        console.log(`Spostato a sweep ${nextVertex.id}`);
+        this.currentIndex++;
+    }
+
+    async goToPrevious() {
+        const currentVertex = this.getCurrentStep();
+        const previousVertex = this.path[this.currentIndex - 1];  // Prossimo sweep (se esiste)
+        const previousPreviousVertex = this.path[this.currentIndex - 2];  // Prossimo sweep (se esiste)
+
+        // Se non c'è prossimo sweep, esce
+        if (!previousVertex) {
+            console.log('Previous step: nessun prossimo step (ultimo)');
+            return;
+        }
+
+        if (currentVertex.id === previousVertex.id) {
+            console.log('Sweep già occupato');
+            return;
+        }
+
+        this.rotateCameraBetween(currentVertex.data.position, previousVertex.data.position);
+
+        // window.jslog.postMessage('navigatingToPreviousStep');
+        window.postMessage('navigatingToPreviousStep', '*');
+
+
+        await this.sdk.Sweep.moveTo(previousVertex.id, {
+            transition: this.sdk.Sweep.Transition.FLY,
+            transitionTime: 1000,
+        });
+
+        // window.jslog.postMessage('arrivedToPreviousStep');
+        window.postMessage('arrivedToPreviousStep', '*');
+
+        if (previousPreviousVertex) {
+            this.rotateCameraBetween(previousVertex.data.position, previousPreviousVertex.data.position);
+        } else {
+            this.rotateCameraBetween(previousVertex.data.position, currentVertex.data.position);
+        }
+
+        console.log(`Spostato a sweep ${previousVertex.id}`);
+        this.currentIndex--;
+    }
+
+    rotateCameraBetween(fromPos, toPos) {
+        if (!fromPos || !toPos) {
+            console.warn('Posizioni non valide per la rotazione');
+            return;
+        }
+
+        const dx = toPos.x - fromPos.x;
+        const dy = toPos.y - fromPos.y;
+        const dz = toPos.z - fromPos.z;
+
+        // Yaw (asse Y) + 180° per correggere direzione
+        let yaw = Math.atan2(dx, dz) * (180 / Math.PI) + 180;
+        yaw = ((yaw + 180) % 360) - 180;  // Normalizzazione tra -180 e 180
+
+        // Pitch (asse X)
+        const distanceXZ = Math.sqrt(dx * dx + dz * dz);
+        const pitch = Math.atan2(dy, distanceXZ) * (180 / Math.PI);
+
+        console.log('? Camera Rotation: pitch:', pitch.toFixed(2), 'yaw:', yaw.toFixed(2));
+
+        this.sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: 200 });
+    }
+
+    async reset() {
+        this.currentIndex = 0;
+        this.sensor.showDebug(false)
+    }
+
+    /**
+     * Draws a path using the Matterport SDK by creating a camera sensor
+     * and subscribing to its readings.
+     * This function iterates over a given path, creating a sensor source
+     * for each vertex and adding it to the sensor.
+     * @param {Object} sdk - The Matterport SDK instance.
+     * @param {Array} path - An array of vertices representing the path to draw,
+     * where each vertex contains an id and data with x, y, z coordinates.
+     */
+    async drawPath() {
+        this.sensor = await this.sdk.Sensor.createSensor(this.sdk.Sensor.SensorType.CAMERA)
+        this.sensor.showDebug(true)
+        this.sensor.readings.subscribe({
+            onUpdated(source, reading) {
+                if (reading.inRange) {
+                    console.log(source.userData.id, "is currently in range")
+                    /*
+                    if (reading.inView) {
+                      console.log("... and currently visible on screen")
+                    }
+                    */
+                }
+            },
+        })
+        for (let i = 0; i < this.path.length; i++) {
+            var position = {
+                x: this.path[i].data.position.x,
+                y: this.path[i].data.position.y - 1.0,
+                z: this.path[i].data.position.z,
+            }
+
+            const source = await this.sdk.Sensor.createSource(
+                this.sdk.Sensor.SourceType.SPHERE,
+                {
+                    origin: position,
+                    radius: 0.1,
+                    userData: {
+                        id: this.path[i].id,
+                    },
+                },
+            )
+
+            this.sources.push(source);
+            this.sensor.addSource(source)
+        }
+
+        console.log('Sensor created ' + this.sensor);
+    }
+
 }
+
 
 
 // Navigation functions that will be called from Flutter
@@ -607,6 +579,11 @@ async function startReceptionNavigation() {
         console.log('Nessun percorso trovato');
     }
 }
+
+
+//////////////////////////////////////////////////////////////////////
+// App communication functions
+//////////////////////////////////////////////////////////////////////
 
 // startPCRoomNavigation(): stesso comportamento del metodo sopra, che parte però dall'ingresso e arriva alla stanza coi PC. 
 // Gli sweep sono 4 ma anche qui me li gestisco da solo
