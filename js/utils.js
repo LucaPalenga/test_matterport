@@ -74,10 +74,9 @@ function debugDrawDirection(sdk, from, to, label = 'Direzione') {
         stemVector: { x: 0, y: 0.2, z: 0 },
         color: { r: 255, g: 0, b: 0 },
 
-        // ✅ Aggiunta media immagine
         media: {
             type: 'photo',
-            src: '../assets/arrow.png',  // Usa l'immagine arrow.png
+            src: '../assets/arrow.png',
         }
     });
 

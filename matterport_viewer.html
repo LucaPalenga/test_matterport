@@ -117,19 +117,36 @@
     <!-- RAV ZQ7sYhu3mQE -->
     <!-- Piangipane 2FESsSn5irZS -->
     <!-- Piangipane modificato s1NFdaHWTHz -->
-    <iframe id="showcase"
-        src="https://my.matterport.com/show/?m=s1NFdaHWTHz&play=1&applicationKey=x02q4mq2nsac7euge3234nhec"
-        allowfullscreen allow="xr-spatial-tracking; accelerometer; gyroscope"></iframe>
+    <iframe id="showcase" src="https://my.matterport.com/show/?m=s1NFdaHWTHz&play=1" allowfullscreen
+        allow="xr-spatial-tracking; accelerometer; gyroscope"></iframe>
 
     <!-- <script src="bundle/sdk.d.ts"></script> -->
     <script type="text/javascript" src="https://static.matterport.com/showcase-sdk/latest.js"></script>
     <!-- Load our JavaScript files -->
-    <script type="module" src="js/main.js"></script>
+    <script type="text/javascript" src="js/main_non_module.js"></script>
+    <!-- <script type="module" src="js/main.js"></script> -->
     <script>
         // Initialize the application when the iframe loads
         document.addEventListener('DOMContentLoaded', () => {
             const iframe = document.getElementById('showcase');
             iframe.addEventListener('load', window.initializeApp);
+        });
+
+        // Ascolta i messaggi provenienti da Flutter o da altre parti
+        window.addEventListener('message', function (event) {
+            // Durante la navigazione disabilita i bottoni
+            if (event.data === 'navigatingToPreviousStep' || event.data === 'navigatingToNextStep') {
+                // Disabilita i bottoni
+                if (nextButton) nextButton.disabled = true;
+                if (prevButton) prevButton.disabled = true;
+            }
+
+            // Durante la navigazione abilito i bottoni  
+            if (event.data === 'arrivedToPreviousStep' || event.data === 'arrivedToNextStep') {
+                // Riabilita i bottoni
+                if (nextButton) nextButton.disabled = false;
+                if (prevButton) prevButton.disabled = false;
+            }
         });
 
     </script>

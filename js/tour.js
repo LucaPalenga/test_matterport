@@ -202,7 +202,7 @@ class Tour {
         for (let i = 0; i < this.path.length; i++) {
             var position = {
                 x: this.path[i].data.position.x,
-                y: this.path[i].data.position.y - 0.5,
+                y: this.path[i].data.position.y - 1.0,
                 z: this.path[i].data.position.z,
             }
 
