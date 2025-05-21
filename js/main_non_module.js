@@ -25,6 +25,7 @@ let currentTour = null;
 let nextButton = null;
 let prevButton = null;
 
+let wasOutOfPath = false;
 
 
 // Initialize the application when the iframe loads
@@ -87,6 +88,7 @@ function initializeApp() {
                     if (currentTour && sweepGraph) {
                         if (!currentTour.isSweepInPath(currentSweep.sid)) {
                             buttonReturnToPath.hidden = false;
+                            wasOutOfPath = true;
 
                             const jsonMessageOutOfPath = {
                                 type: 'outOfPath',
@@ -100,7 +102,7 @@ function initializeApp() {
                             // Check if there is a misalignment between current step and the
                             // current step of the tour.
                             // This means that the user has moved manually in a step of the tour.
-                            if (currentTour.getCurrentStep().id !== currentSweep.sid) {
+                            if (currentTour.getCurrentStep().id !== currentSweep.sid || wasOutOfPath) {
                                 buttonReturnToPath.hidden = true;
                                 let currentVertex = getVertexById(sweepGraph, currentSweep.sid);
 
@@ -115,6 +117,8 @@ function initializeApp() {
                                 // Adjust camera to the current step 
                                 currentTour.adjustCameraTo(currentVertex);
                             }
+
+                            wasOutOfPath = false;
                         }
                     }
                 });
@@ -507,23 +511,11 @@ class Tour {
 
         this.rotateCameraBetween(currentVertex.data.position, nextVertex.data.position);
 
-        const jsonMessageNavNext = {
-            type: 'navigatingToNextStep',
-        };
-        // window.jslog.postMessage(JSON.stringify(jsonMessageNavNext));
-        window.postMessage(JSON.stringify(jsonMessageNavNext), '*');
 
         await this.sdk.Sweep.moveTo(nextVertex.id, {
             transition: this.sdk.Sweep.Transition.FLY,
             transitionTime: 1000,
         });
-
-        const jsonMessageArrNext = {
-            type: 'arrivedToNextStep',
-        };
-        // window.jslog.postMessage(JSON.stringify(jsonMessageArrNext));
-        window.postMessage(JSON.stringify(jsonMessageArrNext), '*');
-
 
         if (nextNextVertex) {
             this.rotateCameraBetween(nextVertex.data.position, nextNextVertex.data.position);
@@ -553,23 +545,10 @@ class Tour {
 
         this.rotateCameraBetween(currentVertex.data.position, previousVertex.data.position);
 
-        const jsonMessageNavPrev = {
-            type: 'navigatingToPreviousStep',
-        };
-        // window.jslog.postMessage(JSON.stringify(jsonMessageNavPrev));
-        window.postMessage(JSON.stringify(jsonMessageNavPrev), '*');
-
-
         await this.sdk.Sweep.moveTo(previousVertex.id, {
             transition: this.sdk.Sweep.Transition.FLY,
             transitionTime: 1000,
         });
-
-        const jsonMessageArrPrev = {
-            type: 'arrivedToPreviousStep',
-        };
-        // window.jslog.postMessage(JSON.stringify(jsonMessageArrPrev));
-        window.postMessage(JSON.stringify(jsonMessageArrPrev), '*');
 
         if (previousPreviousVertex) {
             this.rotateCameraBetween(previousVertex.data.position, previousPreviousVertex.data.position);
@@ -673,10 +652,7 @@ class Tour {
 
         console.log('Sensor created ' + this.sensor);
     }
-
 }
-
-
 
 // Navigation functions that will be called from Flutter
 // startReceptionNavigation(): si aspetta che il Matterport carichi il percorso dal tavolino bianco della stanza 
@@ -703,11 +679,7 @@ async function startReceptionNavigation() {
     else {
         console.log('Nessun percorso trovato');
     }
-
-
-
 }
-
 
 //////////////////////////////////////////////////////////////////////
 // App communication functions
@@ -744,7 +716,19 @@ async function startPCRoomNavigation() {
 async function navigateToPreviousStep() {
     if (currentTour) {
         if (currentTour.hasPrevious()) {
+            const jsonMessageNavPrev = {
+                type: 'navigatingToPreviousStep',
+            };
+            // window.jslog.postMessage(JSON.stringify(jsonMessageNavPrev));
+            window.postMessage(JSON.stringify(jsonMessageNavPrev), '*');
+
             await currentTour.goToPrevious();
+
+            const jsonMessageArrPrev = {
+                type: 'arrivedToPreviousStep',
+            };
+            // window.jslog.postMessage(JSON.stringify(jsonMessageArrPrev));
+            window.postMessage(JSON.stringify(jsonMessageArrPrev), '*');
         }
     }
 }
@@ -752,7 +736,19 @@ async function navigateToPreviousStep() {
 // navigateToNextStep(): si muove allo sweep successivo
 async function navigateToNextStep() {
     if (currentTour) {
+        const jsonMessageNavNext = {
+            type: 'navigatingToNextStep',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageNavNext));
+        window.postMessage(JSON.stringify(jsonMessageNavNext), '*');
+
         await currentTour.goToNext();
+
+        const jsonMessageArrNext = {
+            type: 'arrivedToNextStep',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageArrNext));
+        window.postMessage(JSON.stringify(jsonMessageArrNext), '*');
     }
 }
 
