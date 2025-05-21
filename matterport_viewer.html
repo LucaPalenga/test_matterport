@@ -181,6 +181,18 @@
                     console.log('Out of path');
                 }
 
+                if (data?.type === 'returningToPath') {
+                    console.log('Returning to path');
+                }
+
+                if (data?.type === 'returnedToPath') {
+                    console.log('Returned to path');
+                }
+
+                if (data?.type === 'updateCurrentStep') {
+                    console.log('Update current step:', data.data);
+                }
+
             } catch (error) {
                 console.warn('Errore nella lettura del messaggio:', error, event.data);
             }

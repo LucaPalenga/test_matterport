@@ -47,7 +47,7 @@ function initializeApp() {
                 sdk = mpSdk;
                 console.log('SDK connected');
 
-                requestFullscreen(iframe);
+                // requestFullscreen(iframe);
 
                 return sdk.Model.getData();
             })
@@ -69,19 +69,19 @@ function initializeApp() {
                 });
 
                 sdk.Sweep.current.subscribe(function (sweep) {
-                    if (sweep.sid === '') {
-                        // Not at a sweep position
-                    } else {
-                        if (!initialSweep) {
-                            initialSweep = sweep;
-                        }
-
-                        currentSweep = sweep;
-                        console.log('Current sweep:', sweep);
-
-                        buttonPath1.disabled = false;
-                        buttonPath2.disabled = false;
+                    if (currentSweep && currentSweep.sid === sweep.sid || sweep.sid === '') {
+                        return;
                     }
+
+                    if (!initialSweep) {
+                        initialSweep = sweep;
+                    }
+
+                    currentSweep = sweep;
+                    console.log('Current sweep:', sweep);
+
+                    buttonPath1.disabled = false;
+                    buttonPath2.disabled = false;
 
                     // if current tour doesn't contains the sweep
                     if (currentTour && sweepGraph) {
@@ -92,7 +92,7 @@ function initializeApp() {
                                 type: 'outOfPath',
                             };
 
-                            // window.jslog.postMessage(JSON.stringify({ type: 'outOfPath' }));
+                            // window.jslog.postMessage(JSON.stringify(jsonMessageOutOfPath));
                             window.postMessage(JSON.stringify(jsonMessageOutOfPath), '*');
                         } else {
                             buttonReturnToPath.hidden = true;
@@ -106,7 +106,7 @@ function initializeApp() {
 
                                 const jsonMessage = {
                                     type: 'updateCurrentStep',
-                                    data: currentTour.getPathIndexById(currentVertex.sid),
+                                    data: currentTour.getPathIndexById(currentVertex.id),
                                 };
 
                                 // window.jslog.postMessage(JSON.stringify(jsonMessage));
@@ -137,12 +137,12 @@ function initializeApp() {
                     await navigateToPreviousStep();
                 });
 
-                buttonRemovePath.addEventListener('click', function () {
-                    resetNavigation();
+                buttonReturnToPath.addEventListener('click', async function () {
+                    await returnToPath();
                 });
 
-                buttonReturnToPath.addEventListener('click', function () {
-                    returnToPath();
+                buttonRemovePath.addEventListener('click', function () {
+                    resetNavigation();
                 });
             });
     } catch (e) {
@@ -479,11 +479,6 @@ class Tour {
             transitionTime: 1000,
         });
 
-        const jsonMessageReturnedToPath = {
-            type: 'returnedToPath',
-        };
-        // window.jslog.postMessage(JSON.stringify(jsonMessageArrNext));
-        window.postMessage(JSON.stringify(jsonMessageReturnedToPath), '*');
 
         if (nextVertex) {
             this.rotateCameraBetween(vertex.data.position, nextVertex.data.position);
@@ -773,8 +768,23 @@ function resetNavigation() {
 }
 
 // returnToPath(): torna al percorso
-function returnToPath() {
+async function returnToPath() {
     if (currentTour) {
-        currentTour.goTo(currentTour.getCurrentStep());
+
+        const jsonMessageReturningToPath = {
+            type: 'returningToPath',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageReturningToPath));
+        window.postMessage(JSON.stringify(jsonMessageReturningToPath), '*');
+
+
+        await currentTour.goTo(currentTour.getCurrentStep());
+
+        const jsonMessageReturnedToPath = {
+            type: 'returnedToPath',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageReturnedToPath));
+        window.postMessage(JSON.stringify(jsonMessageReturnedToPath), '*');
+
     }
 }
