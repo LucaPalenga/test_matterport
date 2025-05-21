@@ -140,6 +140,7 @@
                 // Se il messaggio è una stringa, proviamo a convertirlo in JSON
                 if (typeof event.data === 'string') {
                     data = JSON.parse(event.data);
+                    console.log('****** MESSAGE STRING:', data);
                 } else {
                     data = event.data;
                 }
@@ -174,6 +175,10 @@
                     } else {
                         console.warn('Nessun tour attivo o percorso non trovato.');
                     }
+                }
+
+                if (data?.type === 'outOfPath') {
+                    console.log('Out of path');
                 }
 
             } catch (error) {

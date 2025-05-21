@@ -88,7 +88,12 @@ function initializeApp() {
                         if (!currentTour.isSweepInPath(currentSweep.sid)) {
                             buttonReturnToPath.hidden = false;
 
+                            const jsonMessageOutOfPath = {
+                                type: 'outOfPath',
+                            };
+
                             // window.jslog.postMessage(JSON.stringify({ type: 'outOfPath' }));
+                            window.postMessage(JSON.stringify(jsonMessageOutOfPath), '*');
                         } else {
                             buttonReturnToPath.hidden = true;
 
@@ -106,7 +111,6 @@ function initializeApp() {
 
                                 // window.jslog.postMessage(JSON.stringify(jsonMessage));
                                 window.postMessage(JSON.stringify(jsonMessage), '*');
-
 
                                 // Adjust camera to the current step 
                                 currentTour.adjustCameraTo(currentVertex);
