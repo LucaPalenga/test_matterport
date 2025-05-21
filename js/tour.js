@@ -224,6 +224,10 @@ class Tour {
         console.log('Sensor created ' + this.sensor);
     }
 
+    isSweepInPath(sid) {
+        return this.path.some(vertex => vertex.id === sid);
+    }
+
 }
 
 

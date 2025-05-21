@@ -79,12 +79,9 @@
             gap: 10px;
         }
 
-        #removePath {
+        .action-button {
             position: absolute;
             height: 30px;
-            right: 10px;
-            top: 150px;
-            /* Posizionato sotto gli altri due */
             padding: 10px;
             font-size: 16px;
             background-color: rgba(240, 19, 19, 0.96);
@@ -96,7 +93,7 @@
             transition: background-color 0.2s;
         }
 
-        #removePath:hover {
+        .action-button:hover {
             background-color: rgba(255, 255, 255, 0.2);
         }
     </style>
@@ -105,7 +102,10 @@
 <body>
     <button id="startPath1" type="button">Inizia percorso per Scaffale</button>
     <button id="startPath2" type="button">Inizia percorso per Sala</button>
-    <button id="removePath" type="button">Rimuovi percorso</button>
+    <button id="removePath" class="action-button" style="right: 10px; top: 150px;" type="button">Rimuovi
+        percorso</button>
+    <button id="returnToPath" class="action-button" style="right: 10px; top: 200px;" type="button" hidden>Torna al
+        percorso</button>
     <div id="buttons-container"></div>
 
     <div id="nav-buttons-container">
@@ -134,32 +134,53 @@
 
         // Ascolta i messaggi provenienti da Flutter o da altre parti
         window.addEventListener('message', function (event) {
-            // Durante la navigazione disabilita i bottoni
-            if (event.data.type === 'navigatingToPreviousStep' || event.data.type === 'navigatingToNextStep') {
-                // Disabilita i bottoni
-                if (nextButton) nextButton.disabled = true;
-                if (prevButton) prevButton.disabled = true;
-            }
+            let data;
 
-            // Durante la navigazione abilito i bottoni  
-            if (event.data.type === 'arrivedToPreviousStep' || event.data.type === 'arrivedToNextStep') {
-                // Riabilita i bottoni
-                if (nextButton) nextButton.disabled = false;
-                if (prevButton) prevButton.disabled = false;
-            }
-
-            // Durante la navigazione abilito i bottoni  
-            if (event.data.type === 'stepsRetrieved') {
-
-                console.log('******** LISTENER stepsRetrieved ********');
-
-                // Stampa il numero di step
-                if (event.data.data) {
-                    console.log('Numero di step nel tour:', event.data.data);
+            try {
+                // Se il messaggio è una stringa, proviamo a convertirlo in JSON
+                if (typeof event.data === 'string') {
+                    data = JSON.parse(event.data);
                 } else {
-                    console.warn('Nessun tour attivo o percorso non trovato.');
+                    data = event.data;
                 }
+
+                // Durante la navigazione disabilita i bottoni
+                if (data?.type === 'navigatingToPreviousStep' || data?.type === 'navigatingToNextStep') {
+                    // Disabilita i bottoni
+                    if (nextButton) nextButton.disabled = true;
+                    if (prevButton) prevButton.disabled = true;
+                }
+
+                // Durante la navigazione abilito i bottoni  
+                if (data?.type === 'arrivedToPreviousStep' || data?.type === 'arrivedToNextStep') {
+                    // Riabilita i bottoni
+                    if (nextButton) nextButton.disabled = false;
+                    if (prevButton) prevButton.disabled = false;
+                }
+
+                // Durante la navigazione abilito i bottoni  
+                if (data?.type === 'stepsRetrieved') {
+
+                    // Stampa il numero di step
+                    if (data?.data) {
+                        console.log('Numero di step nel tour:', data.data);
+                    } else {
+                        console.warn('Nessun tour attivo o percorso non trovato.');
+                    }
+
+                    // Stampa il numero di step
+                    if (data?.tag) {
+                        console.log('Tag:', data.tag);
+                    } else {
+                        console.warn('Nessun tour attivo o percorso non trovato.');
+                    }
+                }
+
+            } catch (error) {
+                console.warn('Errore nella lettura del messaggio:', error, event.data);
             }
+
+
         });
 
     </script>

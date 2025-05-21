@@ -1,6 +1,13 @@
+
+//////////////////////////////////////////////////////////////////////
 // Global variables
+//////////////////////////////////////////////////////////////////////
+
 let buttonPath1;
 let buttonPath2;
+let buttonRemovePath;
+let buttonReturnToPath;
+
 let iframe;
 
 let sdk = null;
@@ -28,6 +35,7 @@ function initializeApp() {
     nextButton = document.getElementById('nextButton');
     prevButton = document.getElementById('prevButton');
     buttonRemovePath = document.getElementById('removePath');
+    buttonReturnToPath = document.getElementById('returnToPath');
 
     buttonPath1.disabled = true;
     buttonPath2.disabled = true;
@@ -38,6 +46,8 @@ function initializeApp() {
             .then(function (mpSdk) {
                 sdk = mpSdk;
                 console.log('SDK connected');
+
+                requestFullscreen(iframe);
 
                 return sdk.Model.getData();
             })
@@ -72,6 +82,37 @@ function initializeApp() {
                         buttonPath1.disabled = false;
                         buttonPath2.disabled = false;
                     }
+
+                    // if current tour doesn't contains the sweep
+                    if (currentTour && sweepGraph) {
+                        if (!currentTour.isSweepInPath(currentSweep.sid)) {
+                            buttonReturnToPath.hidden = false;
+
+                            // window.jslog.postMessage(JSON.stringify({ type: 'outOfPath' }));
+                        } else {
+                            buttonReturnToPath.hidden = true;
+
+                            // Check if there is a misalignment between current step and the
+                            // current step of the tour.
+                            // This means that the user has moved manually in a step of the tour.
+                            if (currentTour.getCurrentStep().id !== currentSweep.sid) {
+                                buttonReturnToPath.hidden = true;
+                                let currentVertex = getVertexById(sweepGraph, currentSweep.sid);
+
+                                const jsonMessage = {
+                                    type: 'updateCurrentStep',
+                                    data: currentTour.getPathIndexById(currentVertex.sid),
+                                };
+
+                                // window.jslog.postMessage(JSON.stringify(jsonMessage));
+                                window.postMessage(JSON.stringify(jsonMessage), '*');
+
+
+                                // Adjust camera to the current step 
+                                currentTour.adjustCameraTo(currentVertex);
+                            }
+                        }
+                    }
                 });
 
                 // Path buttons listeners
@@ -95,6 +136,10 @@ function initializeApp() {
                 buttonRemovePath.addEventListener('click', function () {
                     resetNavigation();
                 });
+
+                buttonReturnToPath.addEventListener('click', function () {
+                    returnToPath();
+                });
             });
     } catch (e) {
         console.error('Error connecting SDK:', e);
@@ -113,6 +158,23 @@ function createTour(path, tag) {
     console.log('Tour created:', tour);
 
     return tour;
+}
+
+function requestFullscreen(element) {
+    const requestMethod = element.requestFullscreen ||
+        element.webkitRequestFullscreen ||
+        element.mozRequestFullScreen ||
+        element.msRequestFullscreen;
+
+    if (requestMethod) {
+        try {
+            requestMethod.call(element);
+        } catch (err) {
+            console.warn("Fullscreen request failed:", err);
+        }
+    } else {
+        console.warn("Fullscreen not supported on this browser.");
+    }
 }
 
 
@@ -277,7 +339,7 @@ function createCustomGraph(sdk) {
     return graph;
 }
 
-
+// Returns the vertex by ID from the graph
 function getVertexById(graph, id) {
     return graph.vertices.find(v => v.id === id);
 }
@@ -302,7 +364,7 @@ function findClosestSweep(tag) {
 
 
 // Find the shortest path between two sweeps
-function findPath(startVertex, endVertex) {
+function findPath(startVertex, endVertex, tag) {
     if (!startVertex || !endVertex) {
         console.warn('Start o end vertex non trovati nel grafo:', startVertex.id, endVertex.id);
         return null;
@@ -310,11 +372,15 @@ function findPath(startVertex, endVertex) {
 
     const runner = sdk.Graph.createAStarRunner(sweepGraph, startVertex, endVertex).exec();
 
-    // window.jslog.postMessage('stepsRetrieved');
-    window.postMessage({
+    const jsonMessage = {
         type: 'stepsRetrieved',
-        data: runner.path?.length || 0
-    }, '*');
+        data: runner.path?.length || 0,
+        tag: tag.label,
+    };
+
+    // window.jslog.postMessage(JSON.stringify(jsonMessage));
+    window.postMessage(JSON.stringify(jsonMessage), '*');
+
 
     if (runner.path && runner.path.length > 0) {
         const pathIds = runner.path.map(v => v.id);
@@ -373,12 +439,8 @@ class Tour {
         return this.currentIndex >= 0;
     }
 
-    next() {
-        if (this.hasNext()) {
-            this.currentIndex++;
-            return this.getCurrentStep();
-        }
-        return null;
+    isSweepInPath(sid) {
+        return this.path.some(vertex => vertex.id === sid);
     }
 
     initialize() {
@@ -400,6 +462,34 @@ class Tour {
         this.rotateCameraBetween(vertex.data.position, nextVertex.data.position);
     }
 
+    async goTo(vertex) {
+        const nextVertex = this.path[this.currentIndex + 1];  // Prossimo sweep (se esiste)
+
+        if (vertex.id === nextVertex.id) {
+            console.log('Sweep già occupato');
+            return;
+        }
+
+        await this.sdk.Sweep.moveTo(vertex.id, {
+            transition: this.sdk.Sweep.Transition.FLY,
+            transitionTime: 1000,
+        });
+
+        const jsonMessageReturnedToPath = {
+            type: 'returnedToPath',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageArrNext));
+        window.postMessage(JSON.stringify(jsonMessageReturnedToPath), '*');
+
+        if (nextVertex) {
+            this.rotateCameraBetween(vertex.data.position, nextVertex.data.position);
+        } else {
+            this.rotateCameraBetween(vertex.data.position, this.finalTag.anchorPosition);
+        }
+
+        console.log(`Spostato a sweep ${vertex.id}`);
+    }
+
     async goToNext() {
         const currentVertex = this.getCurrentStep();
         const nextVertex = this.path[this.currentIndex + 1];  // Prossimo sweep (se esiste)
@@ -418,16 +508,22 @@ class Tour {
 
         this.rotateCameraBetween(currentVertex.data.position, nextVertex.data.position);
 
-        // window.jslog.postMessage('navigatingToNextStep');
-        window.postMessage({ type: 'navigatingToNextStep' }, '*');
+        const jsonMessageNavNext = {
+            type: 'navigatingToNextStep',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageNavNext));
+        window.postMessage(JSON.stringify(jsonMessageNavNext), '*');
 
         await this.sdk.Sweep.moveTo(nextVertex.id, {
             transition: this.sdk.Sweep.Transition.FLY,
             transitionTime: 1000,
         });
 
-        // window.jslog.postMessage('arrivedToNextStep');
-        window.postMessage({ type: 'arrivedToNextStep' }, '*');
+        const jsonMessageArrNext = {
+            type: 'arrivedToNextStep',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageArrNext));
+        window.postMessage(JSON.stringify(jsonMessageArrNext), '*');
 
 
         if (nextNextVertex) {
@@ -458,8 +554,11 @@ class Tour {
 
         this.rotateCameraBetween(currentVertex.data.position, previousVertex.data.position);
 
-        // window.jslog.postMessage('navigatingToPreviousStep');
-        window.postMessage({ type: 'navigatingToPreviousStep' }, '*');
+        const jsonMessageNavPrev = {
+            type: 'navigatingToPreviousStep',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageNavPrev));
+        window.postMessage(JSON.stringify(jsonMessageNavPrev), '*');
 
 
         await this.sdk.Sweep.moveTo(previousVertex.id, {
@@ -467,8 +566,11 @@ class Tour {
             transitionTime: 1000,
         });
 
-        // window.jslog.postMessage('arrivedToPreviousStep');
-        window.postMessage({ type: 'arrivedToPreviousStep' }, '*');
+        const jsonMessageArrPrev = {
+            type: 'arrivedToPreviousStep',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageArrPrev));
+        window.postMessage(JSON.stringify(jsonMessageArrPrev), '*');
 
         if (previousPreviousVertex) {
             this.rotateCameraBetween(previousVertex.data.position, previousPreviousVertex.data.position);
@@ -506,6 +608,22 @@ class Tour {
     async reset() {
         this.currentIndex = 0;
         this.sensor.showDebug(false)
+    }
+
+    getPathIndexById(vertexId) {
+        return this.path.findIndex(v => v.id === vertexId);
+    }
+
+    // Updates the current index and adjusts the camera position to the next vertex
+    adjustCameraTo(vertex) {
+        this.currentIndex = this.getPathIndexById(vertex.id);
+        let nextVertex = this.path[this.currentIndex + 1];
+
+        if (nextVertex) {
+            this.rotateCameraBetween(vertex.data.position, nextVertex.data.position);
+        } else {
+            this.rotateCameraBetween(vertex.data.position, this.finalTag.anchorPosition);
+        }
     }
 
     /**
@@ -575,7 +693,7 @@ async function startReceptionNavigation() {
     console.log('END SWEEP:', endVertex.id);
     console.log('TAG:', destinationTag.label);
 
-    const path = findPath(initialVertex, endVertex);
+    const path = findPath(initialVertex, endVertex, destinationTag);
     if (path != null && path.length > 0) {
         console.log('PATH:', path);
         currentTour = createTour(path, destinationTag);
@@ -586,6 +704,8 @@ async function startReceptionNavigation() {
     else {
         console.log('Nessun percorso trovato');
     }
+
+
 
 }
 
@@ -606,7 +726,7 @@ async function startPCRoomNavigation() {
     console.log('END SWEEP:', endVertex.id);
     console.log('TAG:', destinationTag.label);
 
-    const path = findPath(initialVertex, endVertex);
+    const path = findPath(initialVertex, endVertex, destinationTag);
     if (path != null && path.length > 0) {
         console.log('PATH:', path);
         currentTour = createTour(path, destinationTag);
@@ -646,4 +766,11 @@ function resetNavigation() {
 
     nextButton.hidden = true;
     prevButton.hidden = true;
+}
+
+// returnToPath(): torna al percorso
+function returnToPath() {
+    if (currentTour) {
+        currentTour.goTo(currentTour.getCurrentStep());
+    }
 }
