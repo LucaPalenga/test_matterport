@@ -1,15 +1,22 @@
-import { distance3D } from './utils.js';
-import { createGraph, getVertexById } from './graph_utils.js';
+
 import { Tour } from './tour.js';
-// import { setupSdk } from '@matterport/sdk'
+import { getVertexById, createCustomGraph } from './graph_utils.js';
+import { distance3D } from './utils.js';
 
-
-
+//////////////////////////////////////////////////////////////////////
 // Global variables
-const buttonPath1 = document.getElementById('startPath1');
-const buttonPath2 = document.getElementById('startPath2');
-const buttonRemovePath = document.getElementById('removePath');
-const iframe = document.getElementById('showcase');
+//////////////////////////////////////////////////////////////////////
+
+// Debug buttons
+let buttonPath1;
+let buttonPath2;
+let buttonRemovePath;
+let buttonReturnToPath;
+let debugToggle;
+let nextButton = null;
+let prevButton = null;
+
+let iframe;
 
 let sdk = null;
 let modelData = null;
@@ -22,159 +29,336 @@ let currentSweep = null;
 let currentPose = null;
 let currentTour = null;
 
-// Navigation buttons
-let nextButton = null;
-let prevButton = null;
-
-// Map that associates mattertag -> closest sweep
-const endSweepsMap = new Map();
+let wasOutOfPath = false;
 
 // Initialize the application when the iframe loads
-window.initializeApp = async () => {
+window.initializeApp = function () {
+    buttonPath1 = document.getElementById('startPath1');
+    buttonPath2 = document.getElementById('startPath2');
+    iframe = document.getElementById('showcase');
+    nextButton = document.getElementById('nextButton');
+    prevButton = document.getElementById('prevButton');
+    buttonRemovePath = document.getElementById('removePath');
+    buttonReturnToPath = document.getElementById('returnToPath');
+    debugToggle = document.getElementById('debugToggle');
+
     buttonPath1.disabled = true;
     buttonPath2.disabled = true;
-    buttonRemovePath.disabled = true;
-
-    // taac key x02q4mq2nsac7euge3234nhec
-    // dotbeyond key ifxi6dn2y34ur0gx8i404m91a
 
     try {
         console.log('Connecting SDK...');
+        window.MP_SDK.connect(iframe, 'x02q4mq2nsac7euge3234nhec', 'latest')
+            .then(function (mpSdk) {
+                sdk = mpSdk;
+                console.log('SDK connected');
 
-        sdk = await window.MP_SDK.connect(
-            iframe,
-            'x02q4mq2nsac7euge3234nhec',
-            'latest',
-        );
-        // sdk = await setupSdk(iframe, 'ifxi6dn2y34ur0gx8i404m91a', '3.5', {
-        //     sdkModules: ['scene', 'camera', 'sweep', 'mattertag'], // scene incluso!
-        // });
-        console.log('SDK connected');
-        // window.cameraManager = new CameraManager(sdk);
+                return sdk.Model.getData();
+            })
+            .then(function (data) {
+                modelData = data;
+                return sdk.Mattertag.getData();
+            })
+            .then(function (tags) {
+                mattertags = tags;
+                console.log('Mattertags retrieved:', mattertags);
+                return createCustomGraph(sdk, modelData);
+            })
+            .then(function (graph) {
+                sweepGraph = graph;
+                console.log('Sweep graph created:', sweepGraph);
 
-        console.log('Scene module:', sdk.Scene); // Deve stampare un oggetto, NON undefined
+                sdk.Camera.pose.subscribe(function (pose) {
+                    currentPose = pose;
+                });
 
-        modelData = await sdk.Model.getData();
-        mattertags = await sdk.Mattertag.getData();
-        console.log('Mattertags retrieved:', mattertags);
+                sdk.Sweep.current.subscribe(function (sweep) {
+                    if (currentSweep && currentSweep.sid === sweep.sid || sweep.sid === '') {
+                        return;
+                    }
 
-        // Create graph
-        // sweepGraph = await sdk.Sweep.createDirectedGraph();
-        // sweepGraph = await sdk.Sweep.createGraph();
-        sweepGraph = await createGraph(sdk);
-        console.log('Sweep graph created:', sweepGraph);
+                    if (!initialSweep) {
+                        initialSweep = sweep;
+                    }
 
-        sdk.Camera.pose.subscribe(function (pose) {
-            // Changes to the Camera pose have occurred.
-            currentPose = pose;
-            // console.log('Current rotation:', pose.rotation);
-            if (initialSweep) {
-                // console.log('Current position is ', pose.position);
-                // console.log('Rotation angle is ', pose.rotation);
-                // console.log('View mode is ', pose.mode);
-            }
-        });
+                    currentSweep = sweep;
+                    console.log('Current sweep:', sweep);
 
+                    buttonPath1.disabled = false;
+                    buttonPath2.disabled = false;
 
-        sdk.Sweep.current.subscribe(function (sweep) {
-            // Change to the current sweep has occurred.
-            if (sweep.sid === '') {
-                // console.log('Not currently stationed at a sweep position');
-            } else {
-                // Save initial sweep
-                if (!initialSweep) {
-                    initialSweep = sweep;
-                }
+                    // if current tour doesn't contains the sweep
+                    if (currentTour && sweepGraph) {
+                        if (!currentTour.isSweepInPath(currentSweep.sid)) {
+                            buttonReturnToPath.hidden = false;
+                            wasOutOfPath = true;
 
-                // Updates current sweep
-                currentSweep = sweep;
-                console.log('Current sweep:', sweep);
+                            const jsonMessageOutOfPath = {
+                                type: 'outOfPath',
+                            };
 
-                // Unlock path button
-                buttonPath1.disabled = false;
-                buttonPath2.disabled = false;
+                            // window.jslog.postMessage(JSON.stringify(jsonMessageOutOfPath));
+                            window.postMessage(JSON.stringify(jsonMessageOutOfPath), '*');
+                        } else {
+                            buttonReturnToPath.hidden = true;
 
-                // console.log('Current position is ', currentPose.position);
-                // console.log('Rotation angle is ', currentPose.rotation);
-                // console.log('View mode is ', currentPose.mode);
-            }
-        });
+                            // Check if there is a misalignment between current step and the
+                            // current step of the tour.
+                            // This means that the user has moved manually in a step of the tour.
+                            if (currentTour.getCurrentStep().id !== currentSweep.sid || wasOutOfPath) {
+                                buttonReturnToPath.hidden = true;
+                                let currentVertex = getVertexById(sweepGraph, currentSweep.sid);
 
-        /////////////////////////////////////////////////////////////////////
-        // Path buttons listeners
-        /////////////////////////////////////////////////////////////////////
+                                const jsonMessage = {
+                                    type: 'updateCurrentStep',
+                                    data: currentTour.getPathIndexById(currentVertex.id),
+                                };
 
-        buttonPath1.addEventListener('click', function () {
-            startPCRoomNavigation();
-            buttonRemovePath.disabled = false;
-        });
+                                // window.jslog.postMessage(JSON.stringify(jsonMessage));
+                                window.postMessage(JSON.stringify(jsonMessage), '*');
 
-        buttonPath2.addEventListener('click', async function () {
-            await startReceptionNavigation();
-            buttonRemovePath.disabled = false;
-        });
+                                // Adjust camera to the current step 
+                                currentTour.adjustCameraTo(currentVertex);
+                            }
 
-        buttonRemovePath.addEventListener('click', function () {
-            resetNavigation();
-            buttonRemovePath.disabled = true;
-        });
+                            wasOutOfPath = false;
+                        }
+                    }
+                });
 
-        /////////////////////////////////////////////////////////////////////
-        // Navigation buttons 
-        /////////////////////////////////////////////////////////////////////
+                // Path buttons listeners
+                buttonPath1.addEventListener('click', function () {
+                    startReceptionNavigation();
+                });
 
-        nextButton = document.getElementById('nextButton');
-        prevButton = document.getElementById('prevButton');
+                buttonPath2.addEventListener('click', function () {
+                    startPCRoomNavigation();
+                });
 
-        nextButton.addEventListener('click', () => {
-            navigateToNextStep();
+                // Navigation buttons
+                nextButton.addEventListener('click', async function () {
+                    await navigateToNextStep();
+                });
 
-            console.log('Tour index:', currentTour.currentIndex);
-            // console.log('Tour current step:', tour.getCurrentStep());
-            console.log('Tour hasNext:', currentTour.hasNext());
-            console.log('Tour hasPrevious:', currentTour.hasPrevious());
-        });
+                prevButton.addEventListener('click', async function () {
+                    await navigateToPreviousStep();
+                });
 
-        prevButton.addEventListener('click', () => {
-            navigateToPreviousStep();
+                buttonReturnToPath.addEventListener('click', async function () {
+                    await returnToPath();
+                });
 
-            console.log('Tour index:', currentTour.currentIndex);
-            // console.log('Tour current step:', tour.getCurrentStep());
-            console.log('Tour hasNext:', currentTour.hasNext());
-            console.log('Tour hasPrevious:', currentTour.hasPrevious());
-        });
+                buttonRemovePath.addEventListener('click', function () {
+                    resetNavigation();
+                });
 
+                let debugVisible = false;
+
+                debugToggle.addEventListener('click', () => {
+                    debugVisible = !debugVisible;
+                    alert(`Debug ${debugVisible ? 'attivo' : 'disattivato'}`);
+
+                    hideButtons(!debugVisible);
+                });
+
+            });
     } catch (e) {
         console.error('Error connecting SDK:', e);
     }
-};
+}
 
-// // Create mattertags tour buttons
-// function createMattertagsButtons() {
-//     const buttonsContainer = document.getElementById('buttons-container');
-//     buttonsContainer.innerHTML = ''; // Pulisce i bottoni esistenti
 
-//     mattertags.forEach((tag, index) => {
-//         const button = document.createElement('button');
-//         button.textContent = `Vai a ${tag.label || `Tappa ${index + 1}`}`;
-//         button.addEventListener('click', () => {
-//             const destinationTag = tag;
-//             const initialVertex = getVertexById(sweepGraph, currentSweep.sid);
-//             const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
+//////////////////////////////////////////////////////////////////////
+// Debug buttons
+//////////////////////////////////////////////////////////////////////
 
-//             sdk.Sweep.moveTo(initialVertex.id, {
-//                 transition: sdk.Sweep.Transition.FLY,
-//                 transitionTime: 2000,
-//             });
 
-//             const path = findPath(initialVertex, endVertex, destinationTag);
-//             console.log('PATH:', path);
+// Show all buttons
+function hideButtons(hidden) {
+    buttonPath1.hidden = hidden;
+    buttonPath2.hidden = hidden;
+    buttonRemovePath.hidden = hidden;
+    // buttonReturnToPath.hidden = !debugVisible;
+    nextButton.hidden = hidden;
+    prevButton.hidden = hidden;
+}
 
-//             currentTour = createTour(path, destinationTag);
-//         });
-//         buttonsContainer.appendChild(button);
-//     });
-// }
+// Create tour
+function createTour(path, tag) {
+    const tour = new Tour(
+        sdk,
+        'Tour ' + tag.label,
+        path,
+        tag,
+    );
+
+    console.log('Tour created:', tour);
+
+    return tour;
+}
+
+
+
+// Find the shortest path between two sweeps
+function findPath(startVertex, endVertex, tag) {
+    if (!startVertex || !endVertex) {
+        console.warn('Start o end vertex non trovati nel grafo:', startVertex.id, endVertex.id);
+        return null;
+    }
+
+    const runner = sdk.Graph.createAStarRunner(sweepGraph, startVertex, endVertex).exec();
+
+    const jsonMessage = {
+        type: 'stepsRetrieved',
+        data: runner.path?.length || 0,
+        tag: tag.label,
+    };
+
+    // window.jslog.postMessage(JSON.stringify(jsonMessage));
+    window.postMessage(JSON.stringify(jsonMessage), '*');
+
+
+    if (runner.path && runner.path.length > 0) {
+        const pathIds = runner.path.map(v => v.id);
+        console.log(`Percorso più breve da ${startVertex.id} a ${endVertex.id}: ${pathIds.join(' -> ')}`);
+        iframe.focus();
+        return runner.path;
+    } else {
+        console.log(`Nessun percorso trovato da ${startVertex.id} a ${endVertex.id}.`);
+        iframe.focus();
+        return null;
+    }
+}
+
+// Navigation functions that will be called from Flutter
+// startReceptionNavigation(): si aspetta che il Matterport carichi il percorso dal tavolino bianco della stanza 
+// coi libri alla reception all'ingresso.
+// Gli sweep del percorso dovrebbero essere 10, li ho hardcodati per ora
+async function startReceptionNavigation() {
+    resetNavigation();
+
+    const destinationTag = mattertags[1];
+    const initialVertex = getVertexById(sweepGraph, 'h04mrb8euskemttx9ysdkqyhb');
+    const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
+    console.log('INITIAL SWEEP:', initialVertex.id);
+    console.log('END SWEEP:', endVertex.id);
+    console.log('TAG:', destinationTag.label);
+
+    const path = findPath(initialVertex, endVertex, destinationTag);
+    if (path != null && path.length > 0) {
+        console.log('PATH:', path);
+        currentTour = createTour(path, destinationTag);
+        currentTour.initialize();
+        nextButton.hidden = false;
+        prevButton.hidden = false;
+    }
+    else {
+        console.log('Nessun percorso trovato');
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+// App communication functions
+//////////////////////////////////////////////////////////////////////
+
+// startPCRoomNavigation(): stesso comportamento del metodo sopra, che parte però dall'ingresso e arriva alla stanza coi PC. 
+// Gli sweep sono 4 ma anche qui me li gestisco da solo
+async function startPCRoomNavigation() {
+    resetNavigation();
+
+    const destinationTag = mattertags[0];
+    const initialVertex = getVertexById(sweepGraph, 'gaqergp0bmzw5sebb8hzf9cid');
+    const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
+    console.log('INITIAL SWEEP:', initialVertex.id);
+    console.log('END SWEEP:', endVertex.id);
+    console.log('TAG:', destinationTag.label);
+
+    const path = findPath(initialVertex, endVertex, destinationTag);
+    if (path != null && path.length > 0) {
+        console.log('PATH:', path);
+        currentTour = createTour(path, destinationTag);
+        currentTour.initialize();
+        nextButton.hidden = false;
+        prevButton.hidden = false;
+    }
+    else {
+        console.log('Nessun percorso trovato');
+    }
+
+}
+
+// navigateToPreviousStep(): si muove allo sweep precedente (si aspetta che il percorso esista già, ma non dovrebbe preoccuparci)
+async function navigateToPreviousStep() {
+    if (currentTour) {
+        if (currentTour.hasPrevious()) {
+            const jsonMessageNavPrev = {
+                type: 'navigatingToPreviousStep',
+            };
+            // window.jslog.postMessage(JSON.stringify(jsonMessageNavPrev));
+            window.postMessage(JSON.stringify(jsonMessageNavPrev), '*');
+
+            await currentTour.goToPrevious();
+
+            const jsonMessageArrPrev = {
+                type: 'arrivedToPreviousStep',
+            };
+            // window.jslog.postMessage(JSON.stringify(jsonMessageArrPrev));
+            window.postMessage(JSON.stringify(jsonMessageArrPrev), '*');
+        }
+    }
+}
+
+// navigateToNextStep(): si muove allo sweep successivo
+async function navigateToNextStep() {
+    if (currentTour) {
+        const jsonMessageNavNext = {
+            type: 'navigatingToNextStep',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageNavNext));
+        window.postMessage(JSON.stringify(jsonMessageNavNext), '*');
+
+        await currentTour.goToNext();
+
+        const jsonMessageArrNext = {
+            type: 'arrivedToNextStep',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageArrNext));
+        window.postMessage(JSON.stringify(jsonMessageArrNext), '*');
+    }
+}
+
+// resetNavigation(): resetta la navigazione, togliendo il percorso attuale
+function resetNavigation() {
+    if (currentTour) {
+        currentTour.reset();
+    }
+    currentTour = null;
+
+    nextButton.hidden = true;
+    prevButton.hidden = true;
+}
+
+// returnToPath(): torna al percorso
+async function returnToPath() {
+    if (currentTour) {
+
+        const jsonMessageReturningToPath = {
+            type: 'returningToPath',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageReturningToPath));
+        window.postMessage(JSON.stringify(jsonMessageReturningToPath), '*');
+
+
+        await currentTour.goTo(currentTour.getCurrentStep());
+
+        const jsonMessageReturnedToPath = {
+            type: 'returnedToPath',
+        };
+        // window.jslog.postMessage(JSON.stringify(jsonMessageReturnedToPath));
+        window.postMessage(JSON.stringify(jsonMessageReturnedToPath), '*');
+    }
+}
+
+
 
 // Find the closest sweep to a mattertag
 function findClosestSweep(tag) {
@@ -193,127 +377,4 @@ function findClosestSweep(tag) {
     console.log(`Sweep più vicino a ${tag.label}: ${closestSweep.sid}`);
     return closestSweep;
 }
-
-// Find the shortest path between two sweeps
-function findPath(startVertex, endVertex, tag) {
-    if (!startVertex || !endVertex) {
-        console.warn('Start o end vertex non trovati nel grafo:', startVertex.id, endVertex.id);
-        return null;
-    }
-
-    const runner = sdk.Graph.createAStarRunner(sweepGraph, startVertex, endVertex).exec();
-
-    if (runner.path && runner.path.length > 0) {
-        const pathIds = runner.path.map(v => v.id);
-        console.log(`Percorso più breve da ${startVertex.id} a ${endVertex.id}: ${pathIds.join(' -> ')}`);
-        iframe.focus();
-        return runner.path;
-    } else {
-        console.log(`Nessun percorso trovato da ${startVertex.id} a ${endVertex.id}.`);
-        iframe.focus();
-        return null;
-    }
-}
-
-// Create tour
-function createTour(path, tag) {
-    const tour = new Tour(
-        sdk,
-        'Tour ' + tag.label,
-        path,
-        tag,
-    );
-
-    console.log('Tour created:', tour);
-
-    return tour;
-}
-
-
-// startReceptionNavigation(): si aspetta che il Matterport carichi il percorso dal tavolino bianco della stanza 
-// coi libri alla reception all'ingresso.
-// Il risultato dovrebbe essere l'utente che compare sullo sweep 1 del percorso 
-// (magari sarebbe carino se poi venisse fatta una chiamata per girarlo al punto 2).
-// Gli sweep del percorso dovrebbero essere 10, li ho hardcodati per ora
-async function startReceptionNavigation() {
-    resetNavigation();
-
-    const destinationTag = mattertags[0];
-    const initialVertex = getVertexById(sweepGraph, 'gaqergp0bmzw5sebb8hzf9cid');
-    // const initialVertex = getVertexById(sweepGraph, initialSweep.sid);
-    const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
-    console.log('INITIAL SWEEP:', initialVertex);
-    console.log('END SWEEP:', endVertex);
-    console.log('TAG:', destinationTag);
-
-
-
-    const path = findPath(initialVertex, endVertex, destinationTag);
-    if (path != null && path.length > 0) {
-        console.log('PATH:', path);
-        currentTour = createTour(path, destinationTag);
-        currentTour.initialize();
-
-        nextButton.hidden = false;
-        prevButton.hidden = false;
-    }
-    else {
-        console.log('Nessun percorso trovato');
-    }
-}
-
-// startPCRoomNavigation(): stesso comportamento del metodo sopra, che parte però dall'ingresso e arriva alla stanza coi PC. 
-// Gli sweep sono 4 ma anche qui me li gestisco da solo
-function startPCRoomNavigation() {
-    resetNavigation();
-
-    const destinationTag = mattertags[1];
-    const initialVertex = getVertexById(sweepGraph, 'h04mrb8euskemttx9ysdkqyhb');
-    // const initialVertex = getVertexById(sweepGraph, initialSweep.sid);
-    const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
-    console.log('INITIAL SWEEP:', initialVertex);
-    console.log('END SWEEP:', endVertex);
-    console.log('TAG:', destinationTag);
-
-    const path = findPath(initialVertex, endVertex, destinationTag);
-    if (path != null && path.length > 0) {
-        console.log('PATH:', path);
-        currentTour = createTour(path, destinationTag);
-        currentTour.initialize();
-
-        nextButton.hidden = false;
-        prevButton.hidden = false;
-    }
-    else {
-        console.log('Nessun percorso trovato');
-    }
-}
-
-// navigateToPreviousStep(): si muove allo sweep precedente (si aspetta che il percorso esista già, ma non dovrebbe preoccuparci)
-function navigateToPreviousStep() {
-    if (currentTour) {
-        if (currentTour.hasPrevious()) {
-            currentTour.goToPrevious();
-        }
-    }
-}
-
-// navigateToNextStep(): si muove allo sweep successivo
-function navigateToNextStep() {
-    if (currentTour) {
-        currentTour.goToNext();
-    }
-}
-
-// resetNavigation(): resetta la navigazione, togliendo il percorso attuale
-function resetNavigation() {
-    if (currentTour) {
-        currentTour.reset();
-    }
-    currentTour = null;
-
-    nextButton.hidden = true;
-    prevButton.hidden = true;
-}
-
 

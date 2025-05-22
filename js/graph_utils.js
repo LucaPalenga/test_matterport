@@ -1,19 +1,18 @@
 
+//////////////////////////////////////////////////////////////////////
+// Graph utilities
+//////////////////////////////////////////////////////////////////////
 
-// Get vertex by ID from the graph
-function getVertexById(graph, id) {
-    return graph.vertices.find(v => v.id === id);
-}
+function createCustomGraph(sdk, modelData) {
+    console.log("Creating custom graph");
+    const graph = sdk.Graph.createDirectedGraph();
 
-async function createGraph(sdk) {
-    console.log("Creating graph")
-    const graph = sdk.Graph.createDirectedGraph()
-    const modelData = await sdk.Model.getData()
     for (let i = 0; i < modelData.sweeps.length; i++) {
-        var sweep = modelData.sweeps[i]
-        // console.log('Adding sweep: ' + sweep.sid)
-        graph.addVertex({ id: sweep.sid, data: sweep })
+        var sweep = modelData.sweeps[i];
+        console.log('Adding sweep: ' + sweep.sid);
+        graph.addVertex({ id: sweep.sid, data: sweep });
     }
+
     graph.setEdge(
         {
             src: graph.vertex("gaqergp0bmzw5sebb8hzf9cid"),
@@ -156,9 +155,15 @@ async function createGraph(sdk) {
             src: graph.vertex("ah16yng1ddssb8hxqas1kc2hd"),
             dst: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
             weight: 1,
-        },
-    )
-    return graph
+        }
+    );
+    return graph;
 }
 
-export { createGraph, getVertexById }
+// Returns the vertex by ID from the graph
+function getVertexById(graph, id) {
+    return graph.vertices.find(v => v.id === id);
+}
+
+
+export { createCustomGraph, getVertexById }

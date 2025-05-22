@@ -48,8 +48,6 @@ function initializeApp() {
                 sdk = mpSdk;
                 console.log('SDK connected');
 
-                // requestFullscreen(iframe);
-
                 return sdk.Model.getData();
             })
             .then(function (data) {
@@ -167,24 +165,6 @@ function createTour(path, tag) {
 
     return tour;
 }
-
-function requestFullscreen(element) {
-    const requestMethod = element.requestFullscreen ||
-        element.webkitRequestFullscreen ||
-        element.mozRequestFullScreen ||
-        element.msRequestFullscreen;
-
-    if (requestMethod) {
-        try {
-            requestMethod.call(element);
-        } catch (err) {
-            console.warn("Fullscreen request failed:", err);
-        }
-    } else {
-        console.warn("Fullscreen not supported on this browser.");
-    }
-}
-
 
 //////////////////////////////////////////////////////////////////////
 // Graph utilities
@@ -459,7 +439,9 @@ class Tour {
         console.log('Current step:', vertex);
         console.log('Next step:', nextVertex);
 
-        this.drawPath();
+        // this.drawPath();
+        // this.drawPathAsLine(this.path);
+        this.drawPathAsLine2(this.path);
 
         // Move to initial sweep
         this.sdk.Sweep.moveTo(vertex.id, {
@@ -583,9 +565,66 @@ class Tour {
         this.sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: 200 });
     }
 
+    async drawPathAsLine2(path) {
+        // Prima pulisci i sensori esistenti
+        // await this.clearPathVisualization();
+
+        this.sensor = await this.sdk.Sensor.createSensor(this.sdk.Sensor.SensorType.CAMERA);
+        this.sensor.showDebug(true);
+
+        // Crea punti più densi per una linea più continua
+        for (let i = 0; i < path.length - 1; i++) {
+            const from = path[i].data.position;
+            const to = path[i + 1].data.position;
+
+            // Crea più punti intermedi tra gli sweep
+            const steps = 7; // Aumenta questo numero per una linea più densa
+            const dx = (to.x - from.x) / steps;
+            const dy = (to.y - from.y) / steps;
+            const dz = (to.z - from.z) / steps;
+
+            for (let j = 0; j <= steps; j++) {
+                const pos = {
+                    x: from.x + dx * j,
+                    y: from.y + dy * j - 0.8, // Abbassa leggermente i punti per renderli visibili
+                    z: from.z + dz * j
+                };
+
+                const source = await this.sdk.Sensor.createSource(
+                    this.sdk.Sensor.SourceType.SPHERE,
+                    {
+                        origin: pos,
+                        radius: 0,
+                        userData: { id: `path-${i}-${j}` },
+                        color: { r: 0, g: 255, b: 255 }
+                    }
+                );
+
+                this.sources.push(source);
+                this.sensor.addSource(source);
+            }
+        }
+    }
+
+
+    // async clearPathVisualization() {
+    //     if (this.sensor) {
+    //         // Distruggi tutte le sorgenti
+    //         for (const source of this.sources) {
+    //             await source.destroy();
+    //         }
+    //         this.sources = [];
+
+    //         // Distruggi il sensore
+    //         await this.pathSensor.destroy();
+    //         this.pathSensor = null;
+    //     }
+    // }
+
     async reset() {
         this.currentIndex = 0;
         this.sensor.showDebug(false)
+        // await this.clearPathVisualization();
     }
 
     getPathIndexById(vertexId) {
@@ -652,6 +691,43 @@ class Tour {
 
         console.log('Sensor created ' + this.sensor);
     }
+
+    async drawLineBetweenSweeps(fromPos, toPos, steps = 10) {
+        const dx = (toPos.x - fromPos.x) / steps;
+        const dy = (toPos.y - fromPos.y) / steps;
+        const dz = (toPos.z - fromPos.z) / steps;
+
+        for (let i = 0; i <= steps; i++) {
+            const pos = {
+                x: fromPos.x + dx * i,
+                y: fromPos.y + dy * i,
+                z: fromPos.z + dz * i,
+            };
+
+            const source = await this.sdk.Sensor.createSource(
+                this.sdk.Sensor.SourceType.SPHERE,
+                {
+                    origin: pos,
+                    radius: 0.05,
+                    userData: { id: `dot-${i}` },
+                }
+            );
+
+            const sensor = await this.sdk.Sensor.createSensor(this.sdk.Sensor.SensorType.CAMERA);
+            sensor.addSource(source);
+            sensor.showDebug(true); // Mostra sfera visiva
+        }
+    }
+
+    async drawPathAsLine(path) {
+        for (let i = 0; i < path.length - 1; i++) {
+            const from = path[i].data.position;
+            const to = path[i + 1].data.position;
+            console.log('Drawing line between', from, to);
+            await this.drawLineBetweenSweeps(from, to);
+        }
+    }
+
 }
 
 // Navigation functions that will be called from Flutter

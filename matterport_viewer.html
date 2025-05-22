@@ -28,14 +28,12 @@
 
         #startPath1 {
             position: absolute;
-            height: 30px;
             right: 10px;
             top: 50px;
         }
 
         #startPath2 {
             position: absolute;
-            height: 30px;
             right: 10px;
             top: 100px;
         }
@@ -81,16 +79,13 @@
 
         .action-button {
             position: absolute;
-            height: 30px;
             padding: 10px;
             font-size: 16px;
-            background-color: rgba(240, 19, 19, 0.96);
             color: white;
-            border: 1px solid #ccc;
             border-radius: 5px;
             cursor: pointer;
             z-index: 1000;
-            transition: background-color 0.2s;
+            background-color: rgba(255, 255, 255, 0.1);
         }
 
         .action-button:hover {
@@ -100,13 +95,15 @@
 </head>
 
 <body>
-    <button id="startPath1" type="button">Inizia percorso per Scaffale</button>
-    <button id="startPath2" type="button">Inizia percorso per Sala</button>
-    <button id="removePath" class="action-button" style="right: 10px; top: 150px;" type="button">Rimuovi
+    <button id="startPath1" type="button" hidden>Inizia percorso per Scaffale</button>
+    <button id="startPath2" type="button" hidden>Inizia percorso per Sala</button>
+    <button id="removePath" class="action-button" style="right: 10px; top: 150px;" type="button" hidden>Rimuovi
         percorso</button>
     <button id="returnToPath" class="action-button" style="right: 10px; top: 200px;" type="button" hidden>Torna al
         percorso</button>
     <div id="buttons-container"></div>
+    <button id="debugToggle" class="action-button" style="right: 10px; top: 10px;">Debug</button>
+
 
     <div id="nav-buttons-container">
         <button class="step-button" id="prevButton" hidden>Indietro</button>
@@ -123,8 +120,8 @@
     <!-- <script src="bundle/sdk.d.ts"></script> -->
     <script type="text/javascript" src="https://static.matterport.com/showcase-sdk/latest.js"></script>
     <!-- Load our JavaScript files -->
-    <script type="text/javascript" src="js/main_non_module.js"></script>
-    <!-- <script type="module" src="js/main.js"></script> -->
+    <!-- <script type="text/javascript" src="js/main_non_module.js"></script> -->
+    <script type="module" src="js/main.js"></script>
     <script>
         // Initialize the application when the iframe loads
         document.addEventListener('DOMContentLoaded', () => {
