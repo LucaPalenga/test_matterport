@@ -166,13 +166,7 @@ window.initializeApp = function () {
     }
 }
 
-
-//////////////////////////////////////////////////////////////////////
-// Debug buttons
-//////////////////////////////////////////////////////////////////////
-
-
-// Show all buttons
+// Show debug buttons
 function hideButtons(hidden) {
     buttonPath1.hidden = hidden;
     buttonPath2.hidden = hidden;

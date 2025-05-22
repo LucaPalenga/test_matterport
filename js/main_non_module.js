@@ -26,6 +26,7 @@ let nextButton = null;
 let prevButton = null;
 
 let wasOutOfPath = false;
+let debugVisible = false;
 
 
 // Initialize the application when the iframe loads
@@ -37,6 +38,7 @@ function initializeApp() {
     prevButton = document.getElementById('prevButton');
     buttonRemovePath = document.getElementById('removePath');
     buttonReturnToPath = document.getElementById('returnToPath');
+    debugToggle = document.getElementById('debugToggle');
 
     buttonPath1.disabled = true;
     buttonPath2.disabled = true;
@@ -146,6 +148,13 @@ function initializeApp() {
                 buttonRemovePath.addEventListener('click', function () {
                     resetNavigation();
                 });
+
+                debugToggle.addEventListener('click', () => {
+                    debugVisible = !debugVisible;
+                    alert(`Debug ${debugVisible ? 'attivo' : 'disattivato'}`);
+
+                    hideButtons(!debugVisible);
+                });
             });
     } catch (e) {
         console.error('Error connecting SDK:', e);
@@ -164,6 +173,16 @@ function createTour(path, tag) {
     console.log('Tour created:', tour);
 
     return tour;
+}
+
+// Show debug buttons
+function hideButtons(hidden) {
+    buttonPath1.hidden = hidden;
+    buttonPath2.hidden = hidden;
+    buttonRemovePath.hidden = hidden;
+    // buttonReturnToPath.hidden = !debugVisible;
+    nextButton.hidden = hidden;
+    prevButton.hidden = hidden;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -439,9 +458,9 @@ class Tour {
         console.log('Current step:', vertex);
         console.log('Next step:', nextVertex);
 
-        // this.drawPath();
+        this.drawPath();
         // this.drawPathAsLine(this.path);
-        this.drawPathAsLine2(this.path);
+        // this.drawPathAsLine2(this.path);
 
         // Move to initial sweep
         this.sdk.Sweep.moveTo(vertex.id, {
