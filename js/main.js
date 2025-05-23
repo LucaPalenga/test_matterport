@@ -1,4 +1,11 @@
 
+// import * as THREE from './bundle/vendors/three/0.171.0/three.module.min.js';
+import * as THREE from 'https://unpkg.com/three@0.171.0/build/three.module.min.js';
+window.THREE = THREE;
+
+import { setupSdk } from '@matterport/sdk';
+
+
 import { Tour } from './tour.js';
 import { getVertexById, createCustomGraph } from './graph_utils.js';
 import { distance3D } from './utils.js';
@@ -47,10 +54,22 @@ window.initializeApp = function () {
 
     try {
         console.log('Connecting SDK...');
+
+
+        const mpSdk = setupSdk('x02q4mq2nsac7euge3234nhec', { space: 's1NFdaHWTHz' });
+        console.log('SDK connected:', mpSdk);
+        console.log('SCENE:', mpSdk.Scene);
+
+
         window.MP_SDK.connect(iframe, 'x02q4mq2nsac7euge3234nhec', 'latest')
             .then(function (mpSdk) {
                 sdk = mpSdk;
                 console.log('SDK connected');
+
+
+                let scene = sdk.Scene;
+                console.log('Scene created:', scene);
+                console.dir(scene);
 
                 return sdk.Model.getData();
             })
@@ -244,10 +263,25 @@ async function startReceptionNavigation() {
         currentTour.initialize();
         nextButton.hidden = false;
         prevButton.hidden = false;
+
+        drawPath(path);
     }
     else {
         console.log('Nessun percorso trovato');
     }
+}
+
+function drawPath(path) {
+    const material = new THREE.LineBasicMaterial({ color: 0x00ffff });
+    const points = path.map(vertex => {
+        const pos = vertex.data.position;
+        return new THREE.Vector3(pos.x, pos.y - 0.3, pos.z);
+    });
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, material);
+
+    sdk.Scene.addObject(line);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -273,6 +307,8 @@ async function startPCRoomNavigation() {
         currentTour.initialize();
         nextButton.hidden = false;
         prevButton.hidden = false;
+
+        drawPath(path);
     }
     else {
         console.log('Nessun percorso trovato');

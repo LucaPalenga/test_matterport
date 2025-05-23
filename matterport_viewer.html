@@ -3,6 +3,11 @@
 
 <head>
     <meta charset="UTF-8" />
+    <meta name="viewport"
+        content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, shrink-to-fit=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Matterport Viewer</title>
     <style>
         html,
@@ -114,11 +119,15 @@
     <!-- RAV ZQ7sYhu3mQE -->
     <!-- Piangipane 2FESsSn5irZS -->
     <!-- Piangipane modificato s1NFdaHWTHz -->
-    <iframe id="showcase" src="https://my.matterport.com/show/?m=s1NFdaHWTHz&play=1" allowfullscreen
-        allow="xr-spatial-tracking; accelerometer; gyroscope"></iframe>
+    <!-- src="/bundle/showcase.html?m=s1NFdaHWTHz&play=1&qs=1&log=0&applicationKey=x02q4mq2nsac7euge3234nhec" -->
+    <!-- src="https://my.matterport.com/show/?m=s1NFdaHWTHz&play=1&applicationKey=x02q4mq2nsac7euge3234nhec" -->
+    <iframe id="showcase"
+        src="/bundle/showcase.html?m=s1NFdaHWTHz&play=1&qs=1&log=0&applicationKey=x02q4mq2nsac7euge3234nhec"
+        allowfullscreen allow="xr-spatial-tracking; accelerometer; gyroscope"></iframe>
 
     <!-- <script src="bundle/sdk.d.ts"></script> -->
-    <script type="text/javascript" src="https://static.matterport.com/showcase-sdk/latest.js"></script>
+    <!-- <script type="text/javascript" src="https://static.matterport.com/showcase-sdk/latest.js"></script> -->
+
     <!-- Load our JavaScript files -->
     <script type="text/javascript" src="js/main_non_module.js"></script>
     <!-- <script type="module" src="js/main.js"></script> -->
@@ -137,7 +146,6 @@
                 // Se il messaggio è una stringa, proviamo a convertirlo in JSON
                 if (typeof event.data === 'string') {
                     data = JSON.parse(event.data);
-                    console.log('****** MESSAGE STRING:', data);
                 } else {
                     data = event.data;
                 }
@@ -163,14 +171,14 @@
                     if (data?.data) {
                         console.log('Numero di step nel tour:', data.data);
                     } else {
-                        console.warn('Nessun tour attivo o percorso non trovato.');
+                        console.log('Nessun tour attivo o percorso non trovato.');
                     }
 
                     // Stampa il numero di step
                     if (data?.tag) {
                         console.log('Tag:', data.tag);
                     } else {
-                        console.warn('Nessun tour attivo o percorso non trovato.');
+                        console.log('Nessun tour attivo o percorso non trovato.');
                     }
                 }
 

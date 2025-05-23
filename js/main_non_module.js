@@ -1,4 +1,5 @@
 
+
 //////////////////////////////////////////////////////////////////////
 // Global variables
 //////////////////////////////////////////////////////////////////////
@@ -11,6 +12,7 @@ let buttonReturnToPath;
 let iframe;
 
 let sdk = null;
+let scene = null;
 let modelData = null;
 let sweepGraph = null;
 let initialSweep = null;
@@ -29,8 +31,23 @@ let wasOutOfPath = false;
 let debugVisible = false;
 
 
+
+
+const key = 'x02q4mq2nsac7euge3234nhec';
+// const key = 'beyaptx90idi0amgighxdu00a';
+
+// declare this file is a module
+// export { };
+
+// // augment window with the MP_SDK property
+// declare global {
+//   interface Window {
+//     MP_SDK: any;
+//   }
+// }
+
 // Initialize the application when the iframe loads
-function initializeApp() {
+async function initializeApp() {
     buttonPath1 = document.getElementById('startPath1');
     buttonPath2 = document.getElementById('startPath2');
     iframe = document.getElementById('showcase');
@@ -45,117 +62,228 @@ function initializeApp() {
 
     try {
         console.log('Connecting SDK...');
-        window.MP_SDK.connect(iframe, 'x02q4mq2nsac7euge3234nhec', 'latest')
-            .then(function (mpSdk) {
-                sdk = mpSdk;
-                console.log('SDK connected');
+        // window.MP_SDK.connect(iframe)
+        // window.MP_SDK.connect(iframe, 'x02q4mq2nsac7euge3234nhec', 'latest')
+        sdk = await iframe.contentWindow.MP_SDK.connect(iframe, key);
+        console.log('SDK connected');
 
-                return sdk.Model.getData();
-            })
-            .then(function (data) {
-                modelData = data;
-                return sdk.Mattertag.getData();
-            })
-            .then(function (tags) {
-                mattertags = tags;
-                console.log('Mattertags retrieved:', mattertags);
-                return createCustomGraph(sdk);
-            })
-            .then(function (graph) {
-                sweepGraph = graph;
-                console.log('Sweep graph created:', sweepGraph);
+        scene = await sdk.Scene;
+        console.log('SCENE: ' + scene);
+        console.dir(scene);
 
-                sdk.Camera.pose.subscribe(function (pose) {
-                    currentPose = pose;
-                });
+        modelData = await sdk.Model.getData();
+        mattertags = await sdk.Mattertag.getData();
+        sweepGraph = createCustomGraph(sdk);
 
-                sdk.Sweep.current.subscribe(function (sweep) {
-                    if (currentSweep && currentSweep.sid === sweep.sid || sweep.sid === '') {
-                        return;
+        sdk.Camera.pose.subscribe(function (pose) {
+            currentPose = pose;
+        });
+
+        sdk.Sweep.current.subscribe(function (sweep) {
+            if (currentSweep && currentSweep.sid === sweep.sid || sweep.sid === '') {
+                return;
+            }
+
+            if (!initialSweep) {
+                initialSweep = sweep;
+            }
+
+            currentSweep = sweep;
+            console.log('Current sweep:', sweep);
+
+            buttonPath1.disabled = false;
+            buttonPath2.disabled = false;
+
+            // if current tour doesn't contains the sweep
+            if (currentTour && sweepGraph) {
+                if (!currentTour.isSweepInPath(currentSweep.sid)) {
+                    buttonReturnToPath.hidden = false;
+                    wasOutOfPath = true;
+
+                    const jsonMessageOutOfPath = {
+                        type: 'outOfPath',
+                    };
+
+                    // window.jslog.postMessage(JSON.stringify(jsonMessageOutOfPath));
+                    window.postMessage(JSON.stringify(jsonMessageOutOfPath), '*');
+                } else {
+                    buttonReturnToPath.hidden = true;
+
+                    // Check if there is a misalignment between current step and the
+                    // current step of the tour.
+                    // This means that the user has moved manually in a step of the tour.
+                    if (currentTour.getCurrentStep().id !== currentSweep.sid || wasOutOfPath) {
+                        buttonReturnToPath.hidden = true;
+                        let currentVertex = getVertexById(sweepGraph, currentSweep.sid);
+
+                        const jsonMessage = {
+                            type: 'updateCurrentStep',
+                            data: currentTour.getPathIndexById(currentVertex.id),
+                        };
+
+                        // window.jslog.postMessage(JSON.stringify(jsonMessage));
+                        window.postMessage(JSON.stringify(jsonMessage), '*');
+
+                        // Adjust camera to the current step 
+                        currentTour.adjustCameraTo(currentVertex);
                     }
 
-                    if (!initialSweep) {
-                        initialSweep = sweep;
-                    }
+                    wasOutOfPath = false;
+                }
+            }
+        });
 
-                    currentSweep = sweep;
-                    console.log('Current sweep:', sweep);
+        // Path buttons listeners
+        buttonPath1.addEventListener('click', function () {
+            startReceptionNavigation();
+        });
 
-                    buttonPath1.disabled = false;
-                    buttonPath2.disabled = false;
+        buttonPath2.addEventListener('click', async function () {
+            startPCRoomNavigation();
+        });
 
-                    // if current tour doesn't contains the sweep
-                    if (currentTour && sweepGraph) {
-                        if (!currentTour.isSweepInPath(currentSweep.sid)) {
-                            buttonReturnToPath.hidden = false;
-                            wasOutOfPath = true;
+        // Navigation buttons
+        nextButton.addEventListener('click', async function () {
+            await navigateToNextStep();
+        });
 
-                            const jsonMessageOutOfPath = {
-                                type: 'outOfPath',
-                            };
+        prevButton.addEventListener('click', async function () {
+            await navigateToPreviousStep();
+        });
 
-                            // window.jslog.postMessage(JSON.stringify(jsonMessageOutOfPath));
-                            window.postMessage(JSON.stringify(jsonMessageOutOfPath), '*');
-                        } else {
-                            buttonReturnToPath.hidden = true;
+        buttonReturnToPath.addEventListener('click', async function () {
+            await returnToPath();
+        });
 
-                            // Check if there is a misalignment between current step and the
-                            // current step of the tour.
-                            // This means that the user has moved manually in a step of the tour.
-                            if (currentTour.getCurrentStep().id !== currentSweep.sid || wasOutOfPath) {
-                                buttonReturnToPath.hidden = true;
-                                let currentVertex = getVertexById(sweepGraph, currentSweep.sid);
+        buttonRemovePath.addEventListener('click', function () {
+            resetNavigation();
+        });
 
-                                const jsonMessage = {
-                                    type: 'updateCurrentStep',
-                                    data: currentTour.getPathIndexById(currentVertex.id),
-                                };
+        debugToggle.addEventListener('click', () => {
+            debugVisible = !debugVisible;
+            alert(`Debug ${debugVisible ? 'attivo' : 'disattivato'}`);
 
-                                // window.jslog.postMessage(JSON.stringify(jsonMessage));
-                                window.postMessage(JSON.stringify(jsonMessage), '*');
+            hideButtons(!debugVisible);
 
-                                // Adjust camera to the current step 
-                                currentTour.adjustCameraTo(currentVertex);
-                            }
+        });
 
-                            wasOutOfPath = false;
-                        }
-                    }
-                });
 
-                // Path buttons listeners
-                buttonPath1.addEventListener('click', function () {
-                    startReceptionNavigation();
-                });
+        // window.MP_SDK.connect(iframe, 'x02q4mq2nsac7euge3234nhec')
+        //     .then(function (mpSdk) {
+        //         sdk = mpSdk;
+        //         console.log('SDK connected');
 
-                buttonPath2.addEventListener('click', function () {
-                    startPCRoomNavigation();
-                });
 
-                // Navigation buttons
-                nextButton.addEventListener('click', async function () {
-                    await navigateToNextStep();
-                });
+        //         console.log('SCENE: ' + sdk.Scene);
+        //         console.dir(sdk.Scene);
 
-                prevButton.addEventListener('click', async function () {
-                    await navigateToPreviousStep();
-                });
+        //         return sdk.Model.getData();
+        //     })
+        //     .then(function (data) {
+        //         modelData = data;
+        //         return sdk.Mattertag.getData();
+        //     })
+        //     .then(function (tags) {
+        //         mattertags = tags;
+        //         console.log('Mattertags retrieved:', mattertags);
+        //         return createCustomGraph(sdk);
+        //     })
+        //     .then(function (graph) {
 
-                buttonReturnToPath.addEventListener('click', async function () {
-                    await returnToPath();
-                });
+        //         sweepGraph = graph;
+        //         console.log('Sweep graph created:', sweepGraph);
 
-                buttonRemovePath.addEventListener('click', function () {
-                    resetNavigation();
-                });
+        //         sdk.Camera.pose.subscribe(function (pose) {
+        //             currentPose = pose;
+        //         });
 
-                debugToggle.addEventListener('click', () => {
-                    debugVisible = !debugVisible;
-                    alert(`Debug ${debugVisible ? 'attivo' : 'disattivato'}`);
+        //         sdk.Sweep.current.subscribe(function (sweep) {
+        //             if (currentSweep && currentSweep.sid === sweep.sid || sweep.sid === '') {
+        //                 return;
+        //             }
 
-                    hideButtons(!debugVisible);
-                });
-            });
+        //             if (!initialSweep) {
+        //                 initialSweep = sweep;
+        //             }
+
+        //             currentSweep = sweep;
+        //             console.log('Current sweep:', sweep);
+
+        //             buttonPath1.disabled = false;
+        //             buttonPath2.disabled = false;
+
+        //             // if current tour doesn't contains the sweep
+        //             if (currentTour && sweepGraph) {
+        //                 if (!currentTour.isSweepInPath(currentSweep.sid)) {
+        //                     buttonReturnToPath.hidden = false;
+        //                     wasOutOfPath = true;
+
+        //                     const jsonMessageOutOfPath = {
+        //                         type: 'outOfPath',
+        //                     };
+
+        //                     // window.jslog.postMessage(JSON.stringify(jsonMessageOutOfPath));
+        //                     window.postMessage(JSON.stringify(jsonMessageOutOfPath), '*');
+        //                 } else {
+        //                     buttonReturnToPath.hidden = true;
+
+        //                     // Check if there is a misalignment between current step and the
+        //                     // current step of the tour.
+        //                     // This means that the user has moved manually in a step of the tour.
+        //                     if (currentTour.getCurrentStep().id !== currentSweep.sid || wasOutOfPath) {
+        //                         buttonReturnToPath.hidden = true;
+        //                         let currentVertex = getVertexById(sweepGraph, currentSweep.sid);
+
+        //                         const jsonMessage = {
+        //                             type: 'updateCurrentStep',
+        //                             data: currentTour.getPathIndexById(currentVertex.id),
+        //                         };
+
+        //                         // window.jslog.postMessage(JSON.stringify(jsonMessage));
+        //                         window.postMessage(JSON.stringify(jsonMessage), '*');
+
+        //                         // Adjust camera to the current step 
+        //                         currentTour.adjustCameraTo(currentVertex);
+        //                     }
+
+        //                     wasOutOfPath = false;
+        //                 }
+        //             }
+        //         });
+
+        //         // Path buttons listeners
+        //         buttonPath1.addEventListener('click', function () {
+        //             startReceptionNavigation();
+        //         });
+
+        //         buttonPath2.addEventListener('click', function () {
+        //             startPCRoomNavigation();
+        //         });
+
+        //         // Navigation buttons
+        //         nextButton.addEventListener('click', async function () {
+        //             await navigateToNextStep();
+        //         });
+
+        //         prevButton.addEventListener('click', async function () {
+        //             await navigateToPreviousStep();
+        //         });
+
+        //         buttonReturnToPath.addEventListener('click', async function () {
+        //             await returnToPath();
+        //         });
+
+        //         buttonRemovePath.addEventListener('click', function () {
+        //             resetNavigation();
+        //         });
+
+        //         debugToggle.addEventListener('click', () => {
+        //             debugVisible = !debugVisible;
+        //             alert(`Debug ${debugVisible ? 'attivo' : 'disattivato'}`);
+
+        //             hideButtons(!debugVisible);
+        //         });
+        //     });
     } catch (e) {
         console.error('Error connecting SDK:', e);
     }
@@ -174,6 +302,8 @@ function createTour(path, tag) {
 
     return tour;
 }
+
+
 
 // Show debug buttons
 function hideButtons(hidden) {
@@ -458,10 +588,6 @@ class Tour {
         console.log('Current step:', vertex);
         console.log('Next step:', nextVertex);
 
-        this.drawPath();
-        // this.drawPathAsLine(this.path);
-        // this.drawPathAsLine2(this.path);
-
         // Move to initial sweep
         this.sdk.Sweep.moveTo(vertex.id, {
             transition: this.sdk.Sweep.Transition.INSTANT,
@@ -483,7 +609,6 @@ class Tour {
             transition: this.sdk.Sweep.Transition.FLY,
             transitionTime: 1000,
         });
-
 
         if (nextVertex) {
             this.rotateCameraBetween(vertex.data.position, nextVertex.data.position);
@@ -584,61 +709,7 @@ class Tour {
         this.sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: 200 });
     }
 
-    async drawPathAsLine2(path) {
-        // Prima pulisci i sensori esistenti
-        // await this.clearPathVisualization();
 
-        this.sensor = await this.sdk.Sensor.createSensor(this.sdk.Sensor.SensorType.CAMERA);
-        this.sensor.showDebug(true);
-
-        // Crea punti più densi per una linea più continua
-        for (let i = 0; i < path.length - 1; i++) {
-            const from = path[i].data.position;
-            const to = path[i + 1].data.position;
-
-            // Crea più punti intermedi tra gli sweep
-            const steps = 7; // Aumenta questo numero per una linea più densa
-            const dx = (to.x - from.x) / steps;
-            const dy = (to.y - from.y) / steps;
-            const dz = (to.z - from.z) / steps;
-
-            for (let j = 0; j <= steps; j++) {
-                const pos = {
-                    x: from.x + dx * j,
-                    y: from.y + dy * j - 0.8, // Abbassa leggermente i punti per renderli visibili
-                    z: from.z + dz * j
-                };
-
-                const source = await this.sdk.Sensor.createSource(
-                    this.sdk.Sensor.SourceType.SPHERE,
-                    {
-                        origin: pos,
-                        radius: 0,
-                        userData: { id: `path-${i}-${j}` },
-                        color: { r: 0, g: 255, b: 255 }
-                    }
-                );
-
-                this.sources.push(source);
-                this.sensor.addSource(source);
-            }
-        }
-    }
-
-
-    // async clearPathVisualization() {
-    //     if (this.sensor) {
-    //         // Distruggi tutte le sorgenti
-    //         for (const source of this.sources) {
-    //             await source.destroy();
-    //         }
-    //         this.sources = [];
-
-    //         // Distruggi il sensore
-    //         await this.pathSensor.destroy();
-    //         this.pathSensor = null;
-    //     }
-    // }
 
     async reset() {
         this.currentIndex = 0;
@@ -711,39 +782,64 @@ class Tour {
         console.log('Sensor created ' + this.sensor);
     }
 
-    async drawLineBetweenSweeps(fromPos, toPos, steps = 10) {
-        const dx = (toPos.x - fromPos.x) / steps;
-        const dy = (toPos.y - fromPos.y) / steps;
-        const dz = (toPos.z - fromPos.z) / steps;
-
-        for (let i = 0; i <= steps; i++) {
-            const pos = {
-                x: fromPos.x + dx * i,
-                y: fromPos.y + dy * i,
-                z: fromPos.z + dz * i,
-            };
-
-            const source = await this.sdk.Sensor.createSource(
-                this.sdk.Sensor.SourceType.SPHERE,
-                {
-                    origin: pos,
-                    radius: 0.05,
-                    userData: { id: `dot-${i}` },
-                }
-            );
-
-            const sensor = await this.sdk.Sensor.createSensor(this.sdk.Sensor.SensorType.CAMERA);
-            sensor.addSource(source);
-            sensor.showDebug(true); // Mostra sfera visiva
-        }
-    }
-
-    async drawPathAsLine(path) {
+    // Draw entire path
+    async drawPathWithSpheres(path) {
+        const [sceneObject] = await sdk.Scene.createObjects(1);
+        console.log('sceneObject: ' + sceneObject);
+        console.dir(sceneObject);
         for (let i = 0; i < path.length - 1; i++) {
             const from = path[i].data.position;
             const to = path[i + 1].data.position;
             console.log('Drawing line between', from, to);
-            await this.drawLineBetweenSweeps(from, to);
+            this.drawSphere(sceneObject, from, to);
+        }
+    }
+
+    drawSphere(sceneObject, from, to) {
+        // Numero di sfere che vuoi creare
+        const sphereCount = 10;
+
+        for (let i = 0; i <= sphereCount; i++) {
+            const t = i / sphereCount;
+
+            // Interpolazione lineare
+            const x = from.x * (1 - t) + to.x * t;
+            const y = from.y * (1 - t) + to.y * t;
+            const z = from.z * (1 - t) + to.z * t;
+
+            // Crea un nodo per la sfera
+            const node = sceneObject.addNode();
+
+            // Posiziona la sfera
+            node.obj3D.position.set(x, y - 1, z);
+
+            /// FUNZIONANTE
+            // node.addComponent('mp.objLoader', {
+            //   url: '/assets/sphere.obj',
+            //   localScale: { x: 0.01, y: 0.01, z: 0.01 }
+            // });
+
+            /// FUNZIONANTE
+            node.addComponent('mp.gltfLoader', {
+                url: '/assets/the_sphere.glb',
+                localScale: { x: 0.03, y: 0.03, z: 0.03 },
+                material: {
+                    color: { r: 0, g: 1, b: 0 }, // Verde
+                }
+            });
+
+            node.addComponent('mp.ambientLight',
+                {
+                    enabled: true,
+                    color: {
+                        r: 0, g: 1, b: 0
+                    },
+                }
+            );
+            console.log('node: ' + node);
+            console.dir(node);
+
+            node.start();
         }
     }
 
@@ -768,6 +864,7 @@ async function startReceptionNavigation() {
         console.log('PATH:', path);
         currentTour = createTour(path, destinationTag);
         currentTour.initialize();
+        currentTour.drawPathWithSpheres(path);
         nextButton.hidden = false;
         prevButton.hidden = false;
     }
@@ -797,6 +894,7 @@ async function startPCRoomNavigation() {
         console.log('PATH:', path);
         currentTour = createTour(path, destinationTag);
         currentTour.initialize();
+        currentTour.drawPathWithSpheres(path);
         nextButton.hidden = false;
         prevButton.hidden = false;
     }
