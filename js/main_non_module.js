@@ -48,112 +48,116 @@ async function initializeApp() {
     buttonPath1.disabled = true;
     buttonPath2.disabled = true;
 
-    try {
-        console.log('Connecting SDK...');
-        sdk = await iframe.contentWindow.MP_SDK.connect(iframe, key);
-        console.log('SDK connected');
+    if (iframe.contentWindow && iframe.contentWindow.MP_SDK) {
+        try {
+            console.log('Connecting SDK...');
 
-        scene = await sdk.Scene;
-        modelData = await sdk.Model.getData();
-        mattertags = await sdk.Mattertag.getData();
-        sweepGraph = createCustomGraph(sdk);
+            sdk = await iframe.contentWindow.MP_SDK.connect(iframe, key);
+            console.log('SDK connected');
 
-        sdk.Camera.pose.subscribe(function (pose) {
-            currentPose = pose;
-        });
+            scene = await sdk.Scene;
+            modelData = await sdk.Model.getData();
+            mattertags = await sdk.Mattertag.getData();
+            sweepGraph = createCustomGraph(sdk);
 
-        sdk.Sweep.current.subscribe(function (sweep) {
-            if (sweep.sid === '') {
-                // Not at a sweep position
-            } else {
-                if (!initialSweep) {
-                    initialSweep = sweep;
-                }
+            sdk.Camera.pose.subscribe(function (pose) {
+                currentPose = pose;
+            });
 
-                currentSweep = sweep;
-                console.log('Current sweep:', sweep);
-
-                buttonPath1.disabled = false;
-                buttonPath2.disabled = false;
-            }
-
-            // if current tour doesn't contains the sweep
-            if (currentTour && sweepGraph) {
-                if (!currentTour.isSweepInPath(currentSweep.sid)) {
-                    buttonReturnToPath.hidden = false;
-                    wasOutOfPath = true;
-
-                    const jsonMessageOutOfPath = {
-                        type: 'outOfPath',
-                    };
-
-                    console.log('Out of path');
-                    // window.jslog.postMessage(JSON.stringify(jsonMessageOutOfPath));
-                    window.postMessage(JSON.stringify(jsonMessageOutOfPath), '*');
+            sdk.Sweep.current.subscribe(function (sweep) {
+                if (sweep.sid === '') {
+                    // Not at a sweep position
                 } else {
-                    buttonReturnToPath.hidden = true;
-
-                    console.log('In path');
-                    // Check if there is a misalignment between current step and the
-                    // current step of the tour.
-                    // This means that the user has moved manually in a step of the tour.
-                    if (currentTour.getCurrentStep().id !== currentSweep.sid || wasOutOfPath) {
-                        buttonReturnToPath.hidden = true;
-                        let currentVertex = getVertexById(sweepGraph, currentSweep.sid);
-
-                        const jsonMessage = {
-                            type: 'updateCurrentStep',
-                            data: currentTour.getPathIndexById(currentVertex.id),
-                        };
-
-                        // window.jslog.postMessage(JSON.stringify(jsonMessage));
-                        window.postMessage(JSON.stringify(jsonMessage), '*');
-
-                        // Adjust camera to the current step 
-                        currentTour.adjustCameraTo(currentVertex);
+                    if (!initialSweep) {
+                        initialSweep = sweep;
                     }
 
-                    wasOutOfPath = false;
+                    currentSweep = sweep;
+                    console.log('Current sweep:', sweep);
+
+                    buttonPath1.disabled = false;
+                    buttonPath2.disabled = false;
                 }
-            }
-        });
 
-        // Path buttons listeners
-        buttonPath1.addEventListener('click', function () {
-            startReceptionNavigation();
-        });
+                // if current tour doesn't contains the sweep
+                if (currentTour && sweepGraph) {
+                    if (!currentTour.isSweepInPath(currentSweep.sid)) {
+                        buttonReturnToPath.hidden = false;
+                        wasOutOfPath = true;
 
-        buttonPath2.addEventListener('click', async function () {
-            startPCRoomNavigation();
-        });
+                        const jsonMessageOutOfPath = {
+                            type: 'outOfPath',
+                        };
 
-        // Navigation buttons
-        nextButton.addEventListener('click', async function () {
-            await navigateToNextStep();
-        });
+                        // window.jslog.postMessage(JSON.stringify(jsonMessageOutOfPath));
+                        window.postMessage(JSON.stringify(jsonMessageOutOfPath), '*');
+                    } else {
+                        buttonReturnToPath.hidden = true;
 
-        prevButton.addEventListener('click', async function () {
-            await navigateToPreviousStep();
-        });
+                        console.log('In path');
+                        // Check if there is a misalignment between current step and the
+                        // current step of the tour.
+                        // This means that the user has moved manually in a step of the tour.
+                        if (currentTour.getCurrentStep().id !== currentSweep.sid || wasOutOfPath) {
+                            buttonReturnToPath.hidden = true;
+                            let currentVertex = getVertexById(sweepGraph, currentSweep.sid);
 
-        buttonReturnToPath.addEventListener('click', async function () {
-            await returnToPath();
-        });
+                            const jsonMessage = {
+                                type: 'updateCurrentStep',
+                                data: currentTour.getPathIndexById(currentVertex.id),
+                            };
 
-        buttonRemovePath.addEventListener('click', function () {
-            resetNavigation();
-        });
+                            // window.jslog.postMessage(JSON.stringify(jsonMessage));
+                            window.postMessage(JSON.stringify(jsonMessage), '*');
 
-        debugToggle.addEventListener('click', () => {
-            debugVisible = !debugVisible;
-            alert(`Debug ${debugVisible ? 'attivo' : 'disattivato'}`);
+                            // Adjust camera to the current step 
+                            currentTour.adjustCameraTo(currentVertex);
+                        }
 
-            hideButtons(!debugVisible);
+                        wasOutOfPath = false;
+                    }
+                }
+            });
 
-        });
+            // Path buttons listeners
+            buttonPath1.addEventListener('click', function () {
+                startReceptionNavigation();
+            });
 
-    } catch (e) {
-        console.error('Error connecting SDK:', e);
+            buttonPath2.addEventListener('click', async function () {
+                startPCRoomNavigation();
+            });
+
+            // Navigation buttons
+            nextButton.addEventListener('click', async function () {
+                await navigateToNextStep();
+            });
+
+            prevButton.addEventListener('click', async function () {
+                await navigateToPreviousStep();
+            });
+
+            buttonReturnToPath.addEventListener('click', async function () {
+                await returnToPath();
+            });
+
+            buttonRemovePath.addEventListener('click', function () {
+                resetNavigation();
+            });
+
+            debugToggle.addEventListener('click', () => {
+                debugVisible = !debugVisible;
+                alert(`Debug ${debugVisible ? 'attivo' : 'disattivato'}`);
+
+                hideButtons(!debugVisible);
+
+            });
+
+        } catch (e) {
+            console.error('Error connecting SDK:', e);
+        }
+    } else {
+        console.error('SDK not found');
     }
 }
 
