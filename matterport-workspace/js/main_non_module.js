@@ -601,6 +601,9 @@ class Tour {
         for (let i = 0; i < this.path.length - 1; i++) {
             const from = this.path[i].data.position;
             const to = this.path[i + 1].data.position;
+
+            console.log('Sphere from:', from.x, from.y, from.z);
+            console.log('Sphere to:', to.x, to.y, to.z);
             this.drawSpheres(this.sceneObject, from, to);
         }
     }
@@ -610,7 +613,7 @@ class Tour {
             const t = i / this.sphereCount;
 
             const x = from.x * (1 - t) + to.x * t;
-            // const y = from.y * (1 - t) + to.y * t;
+            const y = from.y * (1 - t) + to.y * t;
             const z = from.z * (1 - t) + to.z * t;
 
             const node = sceneObject.addNode();
@@ -620,11 +623,8 @@ class Tour {
             node.addComponent('mp.gltfLoader', {
                 url: this.sphereUrl,
                 localScale: { x: .03, y: .03, z: .03 },
-                localPosition: {
-                    x: 0.03, y: 0, z: 0.03
-                },
+                localPosition: { x: -0.15, y: 0, z: 0.15 }, // Offset to center the sphere on the path
                 visible: true,
-
             });
 
             node.addComponent('mp.ambientLight', {
