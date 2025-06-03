@@ -23,6 +23,11 @@ let currentSweep = null;
 let currentPose = null;
 let currentTour = null;
 
+// Navigation variables
+let initialVertex = null;
+let endVertex = null;
+let destinationMattertag = null;
+
 // Navigation buttons
 let nextButton = null;
 let prevButton = null;
@@ -56,7 +61,11 @@ async function initializeApp() {
         console.dir(scene);
         modelData = await sdk.Model.getData();
         mattertags = await sdk.Mattertag.getData();
-        sweepGraph = createCustomGraph(sdk);
+        console.log('Mattertags:', mattertags);
+        console.dir(mattertags);
+
+        // sweepGraph = createCustomGraph(sdk);
+        sweepGraph = createAutoGraph(sdk);
 
         // Log if WebGL is supported
         const supported = isWebGLAvailable();
@@ -192,160 +201,221 @@ function hideButtons(hidden) {
 // Graph utilities
 //////////////////////////////////////////////////////////////////////
 
-function createCustomGraph(sdk) {
-    console.log("Creating custom graph");
-    const graph = sdk.Graph.createDirectedGraph();
+// function createCustomGraph(sdk) {
+//     console.log("Creating custom graph");
+//     const graph = sdk.Graph.createDirectedGraph();
 
-    for (let i = 0; i < modelData.sweeps.length; i++) {
-        var sweep = modelData.sweeps[i];
-        console.log('Adding sweep: ' + sweep.sid);
+//     for (let i = 0; i < modelData.sweeps.length; i++) {
+//         var sweep = modelData.sweeps[i];
+//         console.log('Adding sweep: ' + sweep.sid);
+//         graph.addVertex({ id: sweep.sid, data: sweep });
+//     }
+
+//     graph.setEdge(
+//         {
+//             src: graph.vertex("gaqergp0bmzw5sebb8hzf9cid"),
+//             dst: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
+//             dst: graph.vertex("gaqergp0bmzw5sebb8hzf9cid"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
+//             dst: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
+//             dst: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
+//             weight: 1,
+//         },
+//         // To First Room
+//         {
+//             src: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
+//             dst: graph.vertex("1puw182uiun0fm35aniyfc7sd"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("1puw182uiun0fm35aniyfc7sd"),
+//             dst: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("1puw182uiun0fm35aniyfc7sd"),
+//             dst: graph.vertex("aqnqd9rf5he8x0ixk79dganwd"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("aqnqd9rf5he8x0ixk79dganwd"),
+//             dst: graph.vertex("1puw182uiun0fm35aniyfc7sd"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("aqnqd9rf5he8x0ixk79dganwd"),
+//             dst: graph.vertex("x61ftsf5ghps23nqnwxei5aqc"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("x61ftsf5ghps23nqnwxei5aqc"),
+//             dst: graph.vertex("aqnqd9rf5he8x0ixk79dganwd"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("x61ftsf5ghps23nqnwxei5aqc"),
+//             dst: graph.vertex("fw67acz8d7e1iradgw4n2hq0a"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("fw67acz8d7e1iradgw4n2hq0a"),
+//             dst: graph.vertex("x61ftsf5ghps23nqnwxei5aqc"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("fw67acz8d7e1iradgw4n2hq0a"),
+//             dst: graph.vertex("sn3dy11xeiukdcq9k9ch0i18c"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("sn3dy11xeiukdcq9k9ch0i18c"),
+//             dst: graph.vertex("fw67acz8d7e1iradgw4n2hq0a"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("sn3dy11xeiukdcq9k9ch0i18c"),
+//             dst: graph.vertex("94zph3p4ad2aqhp1zukwq483c"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("94zph3p4ad2aqhp1zukwq483c"),
+//             dst: graph.vertex("sn3dy11xeiukdcq9k9ch0i18c"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("94zph3p4ad2aqhp1zukwq483c"),
+//             dst: graph.vertex("qa6kk5196g9g6n3d0775s04rd"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("qa6kk5196g9g6n3d0775s04rd"),
+//             dst: graph.vertex("94zph3p4ad2aqhp1zukwq483c"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("qa6kk5196g9g6n3d0775s04rd"),
+//             dst: graph.vertex("h04mrb8euskemttx9ysdkqyhb"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("h04mrb8euskemttx9ysdkqyhb"),
+//             dst: graph.vertex("qa6kk5196g9g6n3d0775s04rd"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("h04mrb8euskemttx9ysdkqyhb"),
+//             dst: graph.vertex("6rcqhhm01788w21shgq5xbifc"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("6rcqhhm01788w21shgq5xbifc"),
+//             dst: graph.vertex("h04mrb8euskemttx9ysdkqyhb"),
+//             weight: 1,
+//         },
+//         // To Second Room
+//         {
+//             src: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
+//             dst: graph.vertex("ygarfp05zs5sf4atwxc08fbib"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("ygarfp05zs5sf4atwxc08fbib"),
+//             dst: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("ygarfp05zs5sf4atwxc08fbib"),
+//             dst: graph.vertex("br8bi09wrtaiudwx3uhmqia5c"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("br8bi09wrtaiudwx3uhmqia5c"),
+//             dst: graph.vertex("ygarfp05zs5sf4atwxc08fbib"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
+//             dst: graph.vertex("ah16yng1ddssb8hxqas1kc2hd"),
+//             weight: 1,
+//         },
+//         {
+//             src: graph.vertex("ah16yng1ddssb8hxqas1kc2hd"),
+//             dst: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
+//             weight: 1,
+//         }
+//     );
+//     return graph;
+// }
+
+// Create graph using MST
+function createAutoGraph(sdk) {
+    const graph = sdk.Graph.createDirectedGraph();
+    const sweeps = modelData.sweeps;
+
+    // Add all vertices
+    for (const sweep of sweeps) {
         graph.addVertex({ id: sweep.sid, data: sweep });
     }
 
-    graph.setEdge(
-        {
-            src: graph.vertex("gaqergp0bmzw5sebb8hzf9cid"),
-            dst: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
-            dst: graph.vertex("gaqergp0bmzw5sebb8hzf9cid"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
-            dst: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
-            dst: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
-            weight: 1,
-        },
-        // To First Room
-        {
-            src: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
-            dst: graph.vertex("1puw182uiun0fm35aniyfc7sd"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("1puw182uiun0fm35aniyfc7sd"),
-            dst: graph.vertex("c4kusa7zp8spb10wtsg9iqtcd"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("1puw182uiun0fm35aniyfc7sd"),
-            dst: graph.vertex("aqnqd9rf5he8x0ixk79dganwd"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("aqnqd9rf5he8x0ixk79dganwd"),
-            dst: graph.vertex("1puw182uiun0fm35aniyfc7sd"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("aqnqd9rf5he8x0ixk79dganwd"),
-            dst: graph.vertex("x61ftsf5ghps23nqnwxei5aqc"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("x61ftsf5ghps23nqnwxei5aqc"),
-            dst: graph.vertex("aqnqd9rf5he8x0ixk79dganwd"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("x61ftsf5ghps23nqnwxei5aqc"),
-            dst: graph.vertex("fw67acz8d7e1iradgw4n2hq0a"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("fw67acz8d7e1iradgw4n2hq0a"),
-            dst: graph.vertex("x61ftsf5ghps23nqnwxei5aqc"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("fw67acz8d7e1iradgw4n2hq0a"),
-            dst: graph.vertex("sn3dy11xeiukdcq9k9ch0i18c"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("sn3dy11xeiukdcq9k9ch0i18c"),
-            dst: graph.vertex("fw67acz8d7e1iradgw4n2hq0a"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("sn3dy11xeiukdcq9k9ch0i18c"),
-            dst: graph.vertex("94zph3p4ad2aqhp1zukwq483c"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("94zph3p4ad2aqhp1zukwq483c"),
-            dst: graph.vertex("sn3dy11xeiukdcq9k9ch0i18c"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("94zph3p4ad2aqhp1zukwq483c"),
-            dst: graph.vertex("qa6kk5196g9g6n3d0775s04rd"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("qa6kk5196g9g6n3d0775s04rd"),
-            dst: graph.vertex("94zph3p4ad2aqhp1zukwq483c"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("qa6kk5196g9g6n3d0775s04rd"),
-            dst: graph.vertex("h04mrb8euskemttx9ysdkqyhb"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("h04mrb8euskemttx9ysdkqyhb"),
-            dst: graph.vertex("qa6kk5196g9g6n3d0775s04rd"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("h04mrb8euskemttx9ysdkqyhb"),
-            dst: graph.vertex("6rcqhhm01788w21shgq5xbifc"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("6rcqhhm01788w21shgq5xbifc"),
-            dst: graph.vertex("h04mrb8euskemttx9ysdkqyhb"),
-            weight: 1,
-        },
-        // To Second Room
-        {
-            src: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
-            dst: graph.vertex("ygarfp05zs5sf4atwxc08fbib"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("ygarfp05zs5sf4atwxc08fbib"),
-            dst: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("ygarfp05zs5sf4atwxc08fbib"),
-            dst: graph.vertex("br8bi09wrtaiudwx3uhmqia5c"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("br8bi09wrtaiudwx3uhmqia5c"),
-            dst: graph.vertex("ygarfp05zs5sf4atwxc08fbib"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
-            dst: graph.vertex("ah16yng1ddssb8hxqas1kc2hd"),
-            weight: 1,
-        },
-        {
-            src: graph.vertex("ah16yng1ddssb8hxqas1kc2hd"),
-            dst: graph.vertex("5g8mwk5t8tksqmruus36fraka"),
-            weight: 1,
+    const visited = new Set();
+    const edges = [];
+
+    const startSweep = sweeps[0];
+    visited.add(startSweep.sid);
+
+    // Find MST
+    while (visited.size < sweeps.length) {
+        let bestEdge = null;
+        let bestDistance = Infinity;
+
+        for (const sweepA of sweeps) {
+            if (!visited.has(sweepA.sid)) continue;
+
+            for (const neighborSid of sweepA.neighbors) {
+                const sweepB = sweeps.find(s => s.sid === neighborSid);
+                if (!sweepB || visited.has(sweepB.sid)) continue;
+
+                // Make sure sweepB has sweepA as neighbor (reciprocal connection)
+                if (!sweepB.neighbors.includes(sweepA.sid)) continue;
+
+                const dist = distance3D(sweepA.position, sweepB.position);
+
+                if (dist < bestDistance) {
+                    bestDistance = dist;
+                    bestEdge = { from: sweepA, to: sweepB, weight: dist };
+                }
+            }
         }
-    );
+
+        if (bestEdge) {
+            visited.add(bestEdge.to.sid);
+            edges.push(bestEdge);
+        } else {
+            console.log('No valid edge found. Isolated sweep.');
+            break;
+        }
+    }
+
+    // Add edges (bidirectional)
+    for (const edge of edges) {
+        const srcVertex = graph.vertex(edge.from.sid);
+        const dstVertex = graph.vertex(edge.to.sid);
+
+        graph.setEdge({ src: srcVertex, dst: dstVertex, weight: edge.weight });
+        graph.setEdge({ src: dstVertex, dst: srcVertex, weight: edge.weight });
+    }
+
     return graph;
 }
 
@@ -355,12 +425,12 @@ function getVertexById(graph, id) {
 }
 
 // Find the closest sweep to a mattertag
-function findClosestSweep(tag) {
+function findClosestSweep(mattertag) {
     let closestSweep = null;
     let minDistance = Infinity;
 
     for (const sweep of modelData.sweeps) {
-        const distance = distance3D(sweep.position, tag.anchorPosition);
+        const distance = distance3D(sweep.position, mattertag.anchorPosition);
 
         if (distance < minDistance) {
             minDistance = distance;
@@ -368,7 +438,7 @@ function findClosestSweep(tag) {
         }
     }
 
-    console.log(`Sweep più vicino a ${tag.label}: ${closestSweep.sid}`);
+    console.log(`Sweep più vicino a ${mattertag.label}: ${closestSweep.sid}`);
     return closestSweep;
 }
 
@@ -602,8 +672,6 @@ class Tour {
             const from = this.path[i].data.position;
             const to = this.path[i + 1].data.position;
 
-            console.log('Sphere from:', from.x, from.y, from.z);
-            console.log('Sphere to:', to.x, to.y, to.z);
             this.drawSpheres(this.sceneObject, from, to);
         }
     }
@@ -628,8 +696,8 @@ class Tour {
             });
 
             node.addComponent('mp.ambientLight', {
-                enabled: true,
                 color: this.sphereColor,
+                intensity: 2.0,
             });
 
             node.start();
@@ -671,24 +739,32 @@ function isWebGLAvailable() {
     }
 }
 
-// Navigation functions that will be called from Flutter
-// startReceptionNavigation(): si aspetta che il Matterport carichi il percorso dal tavolino bianco della stanza 
-// coi libri alla reception all'ingresso.
-// Gli sweep del percorso dovrebbero essere 10, li ho hardcodati per ora
-async function startReceptionNavigation() {
-    resetNavigation();
+// Set start position
+function setStartPosition(sweepId) {
+    initialVertex = getVertexById(sweepGraph, sweepId);
+    console.log('SETUP INITIAL SWEEP:', initialVertex.id);
+}
 
-    const destinationTag = mattertags[1];
-    const initialVertex = getVertexById(sweepGraph, 'h04mrb8euskemttx9ysdkqyhb');
-    const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
-    console.log('INITIAL SWEEP:', initialVertex.id);
-    console.log('END SWEEP:', endVertex.id);
-    console.log('TAG:', destinationTag.label);
+// Set end position
+function setEndPosition(mattertagSid) {
+    destinationMattertag = mattertags.find(m => m.sid === mattertagSid);
+    endVertex = getVertexById(sweepGraph, findClosestSweep(destinationMattertag).sid);
+    console.log('SETUP END SWEEP:', endVertex.id);
+}
 
-    const path = findPath(initialVertex, endVertex, destinationTag);
+// Start navigation
+function startNavigation() {
+    console.log('START NAVIGATION');
+
+    if (!initialVertex || !endVertex || !destinationMattertag) {
+        console.log('Missing navigation data');
+        return;
+    }
+
+    const path = findPath(initialVertex, endVertex, destinationMattertag);
     if (path != null && path.length > 0) {
         console.log('PATH:', path);
-        currentTour = createTour(path, destinationTag);
+        currentTour = createTour(path, destinationMattertag);
         currentTour.initialize();
         currentTour.drawPath();
         nextButton.hidden = !debugMode;
@@ -699,30 +775,41 @@ async function startReceptionNavigation() {
     }
 }
 
+// resetNavigation(): resetta la navigazione, togliendo il percorso attuale
+function resetNavigation() {
+    initialVertex = null;
+    endVertex = null;
+    destinationMattertag = null;
+
+    if (currentTour) {
+        currentTour.reset();
+    }
+    currentTour = null;
+
+    nextButton.hidden = true;
+    prevButton.hidden = true;
+}
+
+// Navigation functions that will be called from Flutter
+// startReceptionNavigation(): si aspetta che il Matterport carichi il percorso dal tavolino bianco della stanza 
+// coi libri alla reception all'ingresso.
+// Gli sweep del percorso dovrebbero essere 10, li ho hardcodati per ora
+async function startReceptionNavigation() {
+    resetNavigation();
+
+    setStartPosition('h04mrb8euskemttx9ysdkqyhb');
+    setEndPosition(mattertags[1].sid);
+    startNavigation();
+}
+
 // startPCRoomNavigation(): stesso comportamento del metodo sopra, che parte però dall'ingresso e arriva alla stanza coi PC. 
 // Gli sweep sono 4 ma anche qui me li gestisco da solo
 async function startPCRoomNavigation() {
     resetNavigation();
 
-    const destinationTag = mattertags[0];
-    const initialVertex = getVertexById(sweepGraph, 'gaqergp0bmzw5sebb8hzf9cid');
-    const endVertex = getVertexById(sweepGraph, findClosestSweep(destinationTag).sid);
-    console.log('INITIAL SWEEP:', initialVertex.id);
-    console.log('END SWEEP:', endVertex.id);
-    console.log('TAG:', destinationTag.label);
-
-    const path = findPath(initialVertex, endVertex, destinationTag);
-    if (path != null && path.length > 0) {
-        console.log('PATH:', path);
-        currentTour = createTour(path, destinationTag);
-        currentTour.initialize();
-        currentTour.drawPath();
-        nextButton.hidden = !debugMode;
-        prevButton.hidden = !debugMode;
-    }
-    else {
-        console.log('No path found');
-    }
+    setStartPosition('gaqergp0bmzw5sebb8hzf9cid');
+    setEndPosition(mattertags[0].sid);
+    startNavigation();
 }
 
 // navigateToPreviousStep(): si muove allo sweep precedente (si aspetta che il percorso esista già, ma non dovrebbe preoccuparci)
@@ -763,17 +850,6 @@ async function navigateToNextStep() {
 
         sendAppMessage(jsonMessageArrNext);
     }
-}
-
-// resetNavigation(): resetta la navigazione, togliendo il percorso attuale
-function resetNavigation() {
-    if (currentTour) {
-        currentTour.reset();
-    }
-    currentTour = null;
-
-    nextButton.hidden = true;
-    prevButton.hidden = true;
 }
 
 // Returns the camera to the path
