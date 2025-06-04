@@ -4,33 +4,33 @@
 // Global variables
 //////////////////////////////////////////////////////////////////////
 
+let iframe;
+
+// Debug buttons
 let buttonPath1;
 let buttonPath2;
 let buttonRemovePath;
 let buttonReturnToPath;
+let nextButton = null;
+let prevButton = null;
 
-let iframe;
-
+// SDK variables
 let sdk = null;
 let scene = null;
 let modelData = null;
 let sweepGraph = null;
 let initialSweep = null;
 
+// Points variables
 let mattertags = null;
-
 let currentSweep = null;
 let currentPose = null;
-let currentTour = null;
 
 // Navigation variables
+let currentTour = null;
 let initialVertex = null;
 let endVertex = null;
 let destinationMattertag = null;
-
-// Navigation buttons
-let nextButton = null;
-let prevButton = null;
 
 let wasOutOfPath = false;
 let debugMode = false;
@@ -39,7 +39,7 @@ let debugMode = false;
 const key = 'x02q4mq2nsac7euge3234nhec';
 
 
-// Initialize the application when the iframe loads
+// Initialize the application loading sdk and matterport model
 async function initializeApp() {
     buttonPath1 = document.getElementById('startPath1');
     buttonPath2 = document.getElementById('startPath2');
@@ -57,11 +57,11 @@ async function initializeApp() {
         console.log('SDK connected');
 
         scene = await sdk.Scene;
-        console.log('Scene:', scene);
+        console.log('Scene:');
         console.dir(scene);
         modelData = await sdk.Model.getData();
         mattertags = await sdk.Mattertag.getData();
-        console.log('Mattertags:', mattertags);
+        console.log('Mattertags:');
         console.dir(mattertags);
 
         // sweepGraph = createCustomGraph(sdk);
@@ -111,7 +111,6 @@ async function initializeApp() {
                 } else {
                     buttonReturnToPath.hidden = true;
 
-                    console.log('In path');
                     // Check if there is a misalignment between current step and the
                     // current step of the tour.
                     // This means that the user has moved manually in a step of the tour.
@@ -136,12 +135,12 @@ async function initializeApp() {
         });
 
         // Path buttons listeners
-        buttonPath1.addEventListener('click', function () {
-            startReceptionNavigation();
+        buttonPath1.addEventListener('click', async function () {
+            await startReceptionNavigation();
         });
 
         buttonPath2.addEventListener('click', async function () {
-            startPCRoomNavigation();
+            await startPCRoomNavigation();
         });
 
         // Navigation buttons
@@ -163,7 +162,7 @@ async function initializeApp() {
 
         debugToggle.addEventListener('click', () => {
             debugMode = !debugMode;
-            alert(`Debug ${debugMode ? 'attivo' : 'disattivato'}`);
+            alert(`Debug ${debugMode ? 'enabled' : 'disabled'}`);
 
             hideButtons(!debugMode);
         });
@@ -438,14 +437,14 @@ function findClosestSweep(mattertag) {
         }
     }
 
-    console.log(`Sweep più vicino a ${mattertag.label}: ${closestSweep.sid}`);
+    console.log(`Closest sweep to ${mattertag.label}: ${closestSweep.sid}`);
     return closestSweep;
 }
 
 // Find the shortest path between two sweeps
 function findPath(startVertex, endVertex, tag) {
     if (!startVertex || !endVertex) {
-        console.warn('Start o end vertex non trovati nel grafo:', startVertex.id, endVertex.id);
+        console.warn('Start or end vertex not found in the graph:', startVertex.id, endVertex.id);
         return null;
     }
 
@@ -461,12 +460,10 @@ function findPath(startVertex, endVertex, tag) {
 
     if (runner.path && runner.path.length > 0) {
         const pathIds = runner.path.map(v => v.id);
-        console.log(`Percorso più breve da ${startVertex.id} a ${endVertex.id}: ${pathIds.join(' -> ')}`);
-        iframe.focus();
+        console.log(`Shortest path from ${startVertex.id} to ${endVertex.id}: ${pathIds.join(' -> ')}`);
         return runner.path;
     } else {
-        console.log(`Nessun percorso trovato da ${startVertex.id} a ${endVertex.id}.`);
-        iframe.focus();
+        console.log(`No path found from ${startVertex.id} to ${endVertex.id}.`);
         return null;
     }
 }
@@ -505,6 +502,10 @@ class Tour {
     sphereColor = { r: 1, g: 1, b: 1 }; // White
     sphereUrl = '/matterport-workspace/assets/the_sphere.glb';
 
+    // Camera transition
+    transitionTime = 1000;
+    rotationSpeed = 200;
+
     getCurrentStep() {
         return this.path[this.currentIndex];
     }
@@ -526,29 +527,25 @@ class Tour {
         const vertex = this.getCurrentStep();
         const nextVertex = this.path[this.currentIndex + 1];
 
-        console.log('Current step:', vertex);
-        console.log('Next step:', nextVertex);
-
         // Move to initial sweep
         this.sdk.Sweep.moveTo(vertex.id, {
             transition: this.sdk.Sweep.Transition.INSTANT,
-            transitionTime: 2000,
+            transitionTime: this.transitionTime,
         });
 
-        this.rotateCameraBetween(vertex.data.position, nextVertex.data.position);
+        if (nextVertex) {
+            this.rotateCameraBetween(vertex.data.position, nextVertex.data.position);
+        } else {
+            this.rotateCameraBetween(vertex.data.position, this.finalTag.anchorPosition);
+        }
     }
 
     async goTo(vertex) {
         const nextVertex = this.path[this.currentIndex + 1];
 
-        if (vertex.id === nextVertex.id) {
-            console.log('Sweep already occupied');
-            return;
-        }
-
         await this.sdk.Sweep.moveTo(vertex.id, {
             transition: this.sdk.Sweep.Transition.FLY,
-            transitionTime: 1000,
+            transitionTime: this.transitionTime,
         });
 
         if (nextVertex) {
@@ -579,7 +576,7 @@ class Tour {
 
         await this.sdk.Sweep.moveTo(nextVertex.id, {
             transition: this.sdk.Sweep.Transition.FLY,
-            transitionTime: 1000,
+            transitionTime: this.transitionTime,
         });
 
         if (nextNextVertex) {
@@ -611,7 +608,7 @@ class Tour {
 
         await this.sdk.Sweep.moveTo(previousVertex.id, {
             transition: this.sdk.Sweep.Transition.FLY,
-            transitionTime: 1000,
+            transitionTime: this.transitionTime,
         });
 
         if (previousPreviousVertex) {
@@ -634,17 +631,17 @@ class Tour {
         const dy = toPos.y - fromPos.y;
         const dz = toPos.z - fromPos.z;
 
-        // Yaw (asse Y) + 180° per correggere direzione
+        // Yaw (Y axis) + 180° to correct direction
         let yaw = Math.atan2(dx, dz) * (180 / Math.PI) + 180;
-        yaw = ((yaw + 180) % 360) - 180;  // Normalizzazione tra -180 e 180
+        yaw = ((yaw + 180) % 360) - 180;  // Normalization between -180 and 180
 
-        // Pitch (asse X)
+        // Pitch (X axis)
         const distanceXZ = Math.sqrt(dx * dx + dz * dz);
         const pitch = Math.atan2(dy, distanceXZ) * (180 / Math.PI);
 
         console.log('Camera Rotation: pitch:', pitch.toFixed(2), 'yaw:', yaw.toFixed(2));
 
-        this.sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: 200 });
+        this.sdk.Camera.setRotation({ x: pitch, y: yaw }, { speed: this.rotationSpeed });
     }
 
     getPathIndexById(vertexId) {
@@ -718,43 +715,30 @@ class Tour {
 //////////////////////////////////////////////////////////////////////
 // App communication functions
 //////////////////////////////////////////////////////////////////////
-
-// Send app message jslog
-function sendAppMessage(jsonMessage) {
-    if (window.jslog) {
-        window.jslog.postMessage(JSON.stringify(jsonMessage));
-    }
-    window.postMessage(JSON.stringify(jsonMessage), '*');
-}
-
-// Check if WebGL is available
-function isWebGLAvailable() {
-    try {
-        const canvas = document.createElement('canvas');
-        return !!(window.WebGLRenderingContext && (
-            canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
-        ));
-    } catch (e) {
-        return false;
-    }
-}
+// Example of functions to be called from Flutter to start navigation
+//
+// webViewController
+//  ..runJavaScript('setStartPosition("<sweepId>")') ex: "6rcqhhm01788w21shgq5xbifc"
+//  ..runJavaScript('setEndPosition("<mattertagSid>")') ex: "hDLthVM3uCY"
+//  ..runJavaScript('startNavigation()')
+//////////////////////////////////////////////////////////////////////
 
 // Set start position
 function setStartPosition(sweepId) {
     initialVertex = getVertexById(sweepGraph, sweepId);
-    console.log('SETUP INITIAL SWEEP:', initialVertex.id);
+    console.log('Initial sweep:', initialVertex.id);
 }
 
 // Set end position
 function setEndPosition(mattertagSid) {
     destinationMattertag = mattertags.find(m => m.sid === mattertagSid);
     endVertex = getVertexById(sweepGraph, findClosestSweep(destinationMattertag).sid);
-    console.log('SETUP END SWEEP:', endVertex.id);
+    console.log('Destination sweep:', endVertex.id);
 }
 
 // Start navigation
 function startNavigation() {
-    console.log('START NAVIGATION');
+    console.log('Start navigation');
 
     if (!initialVertex || !endVertex || !destinationMattertag) {
         console.log('Missing navigation data');
@@ -763,7 +747,7 @@ function startNavigation() {
 
     const path = findPath(initialVertex, endVertex, destinationMattertag);
     if (path != null && path.length > 0) {
-        console.log('PATH:', path);
+        console.log('Path found:', path);
         currentTour = createTour(path, destinationMattertag);
         currentTour.initialize();
         currentTour.drawPath();
@@ -775,7 +759,7 @@ function startNavigation() {
     }
 }
 
-// resetNavigation(): resetta la navigazione, togliendo il percorso attuale
+// Reset navigation, removing the current path
 function resetNavigation() {
     initialVertex = null;
     endVertex = null;
@@ -788,31 +772,11 @@ function resetNavigation() {
 
     nextButton.hidden = true;
     prevButton.hidden = true;
+
+    console.log('Navigation reset');
 }
 
-// Navigation functions that will be called from Flutter
-// startReceptionNavigation(): si aspetta che il Matterport carichi il percorso dal tavolino bianco della stanza 
-// coi libri alla reception all'ingresso.
-// Gli sweep del percorso dovrebbero essere 10, li ho hardcodati per ora
-async function startReceptionNavigation() {
-    resetNavigation();
-
-    setStartPosition('h04mrb8euskemttx9ysdkqyhb');
-    setEndPosition(mattertags[1].sid);
-    startNavigation();
-}
-
-// startPCRoomNavigation(): stesso comportamento del metodo sopra, che parte però dall'ingresso e arriva alla stanza coi PC. 
-// Gli sweep sono 4 ma anche qui me li gestisco da solo
-async function startPCRoomNavigation() {
-    resetNavigation();
-
-    setStartPosition('gaqergp0bmzw5sebb8hzf9cid');
-    setEndPosition(mattertags[0].sid);
-    startNavigation();
-}
-
-// navigateToPreviousStep(): si muove allo sweep precedente (si aspetta che il percorso esista già, ma non dovrebbe preoccuparci)
+// Moves to the previous sweep (it waits for the path to exist already, but it shouldn't worry about it)
 async function navigateToPreviousStep() {
     if (currentTour) {
         if (currentTour.hasPrevious()) {
@@ -833,7 +797,7 @@ async function navigateToPreviousStep() {
     }
 }
 
-// navigateToNextStep(): si muove allo sweep successivo
+// Moves to the next sweep
 async function navigateToNextStep() {
     if (currentTour) {
         const jsonMessageNavNext = {
@@ -862,6 +826,7 @@ async function returnToPath() {
 
         sendAppMessage(jsonMessageReturningToPath);
 
+        console.log('Returning to path', currentTour.getCurrentStep());
         await currentTour.goTo(currentTour.getCurrentStep());
 
         const jsonMessageReturnedToPath = {
@@ -871,3 +836,46 @@ async function returnToPath() {
         sendAppMessage(jsonMessageReturnedToPath);
     }
 }
+
+// Send app message jslog
+function sendAppMessage(jsonMessage) {
+    if (window.jslog) {
+        window.jslog.postMessage(JSON.stringify(jsonMessage));
+    }
+    window.postMessage(JSON.stringify(jsonMessage), '*');
+}
+
+// Check if WebGL is available
+function isWebGLAvailable() {
+    try {
+        const canvas = document.createElement('canvas');
+        return !!(window.WebGLRenderingContext && (
+            canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
+        ));
+    } catch (e) {
+        return false;
+    }
+}
+
+// Test navigation to the reception
+async function startReceptionNavigation() {
+    resetNavigation();
+
+    // setStartPosition("ah16yng1ddssb8hxqas1kc2hd");
+    // setStartPosition('h04mrb8euskemttx9ysdkqyhb');
+    // setStartPosition('fw67acz8d7e1iradgw4n2hq0a');
+    setStartPosition("5g8mwk5t8tksqmruus36fraka");
+    setEndPosition(mattertags[1].sid);
+    startNavigation();
+}
+
+// Test navigation to the room with the PCs
+async function startPCRoomNavigation() {
+    resetNavigation();
+
+    // setStartPosition('gaqergp0bmzw5sebb8hzf9cid');
+    setStartPosition('6rcqhhm01788w21shgq5xbifc');
+    setEndPosition(mattertags[0].sid);
+    startNavigation();
+}
+
